@@ -1,0 +1,9 @@
+{
+  "format_version": "1.0",
+  "automaton": "automata/brians_brain.json",
+  "world": {"rows": 50, "cols": 50, "boundary": "fixed", "outside_state": "OFF"},
+  "initial_state": {"mode": "random", "proportions": {"FIRING": 0.1, "OFF": 0.9}},
+  "generations": 100,
+  "storage": {"mode": "all"},
+  "seed": 42
+}

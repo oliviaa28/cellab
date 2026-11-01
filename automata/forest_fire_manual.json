@@ -1,0 +1,18 @@
+{
+  "format_version": "1.0",
+  "automaton": "automata/forest_fire.json",
+  "world": {"rows": 5, "cols": 5, "boundary": "fixed", "outside_state": "EMPTY"},
+  "initial_state": {
+    "mode": "manual",
+    "legend": {".": "EMPTY", "T": "TREE", "F": "FIRE"},
+    "grid": [
+      "TTTTT",
+      "TTTTT",
+      "TTFTT",
+      "TTTTT",
+      "TTTTT"
+    ]
+  },
+  "generations": 5,
+  "storage": {"mode": "all"}
+}

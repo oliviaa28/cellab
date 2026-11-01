@@ -1,0 +1,14 @@
+{
+  "format_version": "1.0",
+  "automaton": "automata/rule_30.json",
+  "world": {"rows": 1, "cols": 51, "boundary": "fixed", "outside_state": "OFF"},
+  "initial_state": {
+    "mode": "pattern",
+    "legend": {".": "OFF", "X": "ON"},
+    "pattern": ["X"],
+    "position": [0, 25],
+    "background": "OFF"
+  },
+  "generations": 25,
+  "storage": {"mode": "all"}
+}
