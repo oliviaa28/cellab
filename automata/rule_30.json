@@ -1,0 +1,20 @@
+{
+  "format_version": "1.0",
+  "name": "Rule 30",
+  "description": "Automat elementar 1D; starea nouă depinde de stânga, centru, dreapta.",
+  "states": [
+    {"name": "OFF", "color": "#F5F3EE"},
+    {"name": "ON",  "color": "#1E1E1E"}
+  ],
+  "neighborhood": {"type": "1d", "radius": 1},
+  "rules": [
+    {"from": "*", "to": "OFF", "when": {"pattern": ["ON",  "ON",  "ON" ]}},
+    {"from": "*", "to": "OFF", "when": {"pattern": ["ON",  "ON",  "OFF"]}},
+    {"from": "*", "to": "OFF", "when": {"pattern": ["ON",  "OFF", "ON" ]}},
+    {"from": "*", "to": "ON",  "when": {"pattern": ["ON",  "OFF", "OFF"]}},
+    {"from": "*", "to": "ON",  "when": {"pattern": ["OFF", "ON",  "ON" ]}},
+    {"from": "*", "to": "ON",  "when": {"pattern": ["OFF", "ON",  "OFF"]}},
+    {"from": "*", "to": "ON",  "when": {"pattern": ["OFF", "OFF", "ON" ]}},
+    {"from": "*", "to": "OFF", "when": {"pattern": ["OFF", "OFF", "OFF"]}}
+  ]
+}
