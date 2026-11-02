@@ -1,13 +1,9 @@
 {
-  "format_version": "1.0",
+  "format_version": "2.0",
   "automaton": "automata/rule_30.json",
-  "world": {"rows": 1, "cols": 51, "boundary": "fixed", "outside_state": "OFF"},
+  "world": {"rows": 1, "cols": 51, "boundary": "fixed", "outside": {"state": "OFF"}},
   "initial_state": {
-    "mode": "pattern",
-    "legend": {".": "OFF", "X": "ON"},
-    "pattern": ["X"],
-    "position": [0, 25],
-    "background": "OFF"
+    "cells": {"mode": "pattern", "background": "OFF", "pattern": ["X"], "position": [0, 25]}
   },
   "generations": 25,
   "storage": {"mode": "all"}

@@ -1,0 +1,12 @@
+{
+  "format_version": "2.0",
+  "automaton": "automata/forest_fire_stochastic.json",
+  "parameters": {"p": 0.05},
+  "world": {"rows": 60, "cols": 60, "boundary": "toroidal"},
+  "initial_state": {
+    "cells": {"mode": "random", "proportions": {"TREE": 0.6, "EMPTY": 0.4}}
+  },
+  "generations": 200,
+  "storage": {"mode": "every", "every": 10},
+  "seed": 7
+}

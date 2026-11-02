@@ -1,0 +1,13 @@
+{
+  "format_version": "2.0",
+  "automaton": "automata/sandpile.json",
+  "world": {"rows": 3, "cols": 3, "boundary": "fixed", "outside": {"state": "CELL", "values": {"grains": 0}}},
+  "initial_state": {
+    "cells": {"mode": "fill", "state": "CELL"},
+    "values": {
+      "grains": {"mode": "manual", "grid": [[0, 1, 2], [2, 8, 1], [1, 2, 0]]}
+    }
+  },
+  "generations": 10,
+  "storage": {"mode": "all"}
+}
