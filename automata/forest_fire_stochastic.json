@@ -1,0 +1,19 @@
+{
+  "format_version": "2.0",
+  "kind": "cells",
+  "name": "Forest Fire (stochastic)",
+  "description": "Copacii cresc cu probabilitatea p, iau foc spontan cu probabilitatea q.",
+  "states": [
+    {"name": "EMPTY", "symbol": ".", "color": "#8B6F47"},
+    {"name": "TREE",  "symbol": "T", "color": "#2E7D32"},
+    {"name": "FIRE",  "symbol": "F", "color": "#E4572E"}
+  ],
+  "neighborhood": {"type": "moore", "radius": 1},
+  "parameters": {"p": 0.01, "q": 0.0001},
+  "rules": [
+    {"from": "FIRE",  "to": "EMPTY"},
+    {"from": "TREE",  "to": "FIRE",  "when": {"count": "FIRE", "min": 1}},
+    {"from": "TREE",  "to": "FIRE",  "probability": "q"},
+    {"from": "EMPTY", "to": "TREE",  "probability": "p"}
+  ]
+}

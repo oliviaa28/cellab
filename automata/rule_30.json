@@ -1,10 +1,11 @@
 {
-  "format_version": "1.0",
+  "format_version": "2.0",
+  "kind": "cells",
   "name": "Rule 30",
-  "description": "Automat elementar 1D; starea nouă depinde de stânga, centru, dreapta.",
+  "description": "Automat elementar 1D; starea noua depinde de stanga, centru, dreapta.",
   "states": [
-    {"name": "OFF", "color": "#F5F3EE"},
-    {"name": "ON",  "color": "#1E1E1E"}
+    {"name": "OFF", "symbol": ".", "color": "#F5F3EE"},
+    {"name": "ON",  "symbol": "X", "color": "#1E1E1E"}
   ],
   "neighborhood": {"type": "1d", "radius": 1},
   "rules": [

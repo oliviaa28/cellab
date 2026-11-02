@@ -1,17 +1,17 @@
 {
-  "format_version": "1.0",
+  "format_version": "2.0",
+  "kind": "cells",
   "name": "Brian's Brain",
-  "description": "Celulele se aprind când au exact 2 vecini aprinși, apoi mor treptat.",
+  "description": "Celulele se aprind cand au exact 2 vecini aprinsi, apoi mor treptat.",
   "states": [
-    {"name": "OFF",    "color": "#1E1E1E"},
-    {"name": "FIRING", "color": "#F2C14E"},
-    {"name": "DYING",  "color": "#3A7BD5"}
+    {"name": "OFF",    "symbol": ".", "color": "#1E1E1E"},
+    {"name": "FIRING", "symbol": "F", "color": "#F2C14E"},
+    {"name": "DYING",  "symbol": "d", "color": "#3A7BD5"}
   ],
   "neighborhood": {"type": "moore", "radius": 1},
   "rules": [
     {"from": "FIRING", "to": "DYING"},
     {"from": "DYING",  "to": "OFF"},
-    {"from": "OFF",    "to": "FIRING",
-     "when": {"count": "FIRING", "min": 2, "max": 2}}
+    {"from": "OFF",    "to": "FIRING", "when": {"count": "FIRING", "min": 2, "max": 2}}
   ]
 }

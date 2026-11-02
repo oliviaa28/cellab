@@ -1,0 +1,20 @@
+{
+  "format_version": "2.0",
+  "kind": "cells",
+  "name": "Cyclic Cellular Automaton",
+  "description": "O celula trece in starea urmatoare daca cel putin 'threshold' vecini sunt deja in ea.",
+  "states": [
+    {"name": "S0", "symbol": "0", "color": "#264653"},
+    {"name": "S1", "symbol": "1", "color": "#2A9D8F"},
+    {"name": "S2", "symbol": "2", "color": "#E9C46A"},
+    {"name": "S3", "symbol": "3", "color": "#E76F51"}
+  ],
+  "neighborhood": {"type": "moore", "radius": 1},
+  "parameters": {"threshold": 2},
+  "rules": [
+    {"from": "S0", "to": "S1", "when": {"count": "S1", "min": "threshold"}},
+    {"from": "S1", "to": "S2", "when": {"count": "S2", "min": "threshold"}},
+    {"from": "S2", "to": "S3", "when": {"count": "S3", "min": "threshold"}},
+    {"from": "S3", "to": "S0", "when": {"count": "S0", "min": "threshold"}}
+  ]
+}

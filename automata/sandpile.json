@@ -1,0 +1,16 @@
+{
+  "format_version": "2.0",
+  "kind": "cells",
+  "name": "Sandpile",
+  "description": "O celula cu cel putin 4 graunte se rastoarna: pierde 4 si da cate unul celor 4 vecini.",
+  "states": [
+    {"name": "CELL", "symbol": "c", "color": "#D9C29A"}
+  ],
+  "variables": [
+    {"name": "grains", "type": "int", "default": 0}
+  ],
+  "neighborhood": {"type": "von_neumann", "radius": 1},
+  "rules": [
+    {"from": "*", "set": {"grains": "grains - 4 * (grains >= 4) + count_where(grains >= 4)"}}
+  ]
+}

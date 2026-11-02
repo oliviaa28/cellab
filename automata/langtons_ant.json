@@ -1,0 +1,24 @@
+{
+  "format_version": "2.0",
+  "kind": "agents",
+  "name": "Langton's Ant",
+  "description": "O furnica: pe alb vireaza dreapta, pe negru stanga; inverseaza culoarea si avanseaza.",
+  "states": [
+    {"name": "WHITE", "symbol": ".", "color": "#FFFFFF"},
+    {"name": "BLACK", "symbol": "#", "color": "#1E1E1E"}
+  ],
+  "neighborhood": {"type": "moore", "radius": 1},
+  "agent_types": [
+    {"name": "ANT", "symbol": "a", "color": "#E4572E",
+     "can_enter": ["WHITE", "BLACK"],
+     "attributes": {"direction": "N"}}
+  ],
+  "agent_order": "fixed",
+  "agent_rules": [
+    {"agent": "ANT", "when": {"cell": "WHITE"},
+     "do": [{"turn": "right"}, {"set_cell": "BLACK"}, {"move": "forward"}]},
+    {"agent": "ANT", "when": {"cell": "BLACK"},
+     "do": [{"turn": "left"}, {"set_cell": "WHITE"}, {"move": "forward"}]}
+  ],
+  "rules": []
+}

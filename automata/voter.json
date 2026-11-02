@@ -1,0 +1,15 @@
+{
+  "format_version": "2.0",
+  "kind": "cells",
+  "name": "Voter Model",
+  "description": "O celula adopta opinia majoritara a vecinilor; la egalitate ramane neschimbata.",
+  "states": [
+    {"name": "A", "symbol": "A", "color": "#3A7BD5"},
+    {"name": "B", "symbol": "B", "color": "#E4572E"}
+  ],
+  "neighborhood": {"type": "moore", "radius": 1},
+  "rules": [
+    {"from": "A", "to": "B", "when": {"expr": "count(B) > count(A)"}},
+    {"from": "B", "to": "A", "when": {"expr": "count(A) > count(B)"}}
+  ]
+}

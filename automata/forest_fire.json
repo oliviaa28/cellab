@@ -1,11 +1,12 @@
 {
-  "format_version": "1.0",
+  "format_version": "2.0",
+  "kind": "cells",
   "name": "Forest Fire",
-  "description": "Focul se propagă la copacii vecini, apoi se stinge.",
+  "description": "Focul se propaga la copacii vecini, apoi se stinge.",
   "states": [
-    {"name": "EMPTY", "color": "#8B6F47"},
-    {"name": "TREE",  "color": "#2E7D32"},
-    {"name": "FIRE",  "color": "#E4572E"}
+    {"name": "EMPTY", "symbol": ".", "color": "#8B6F47"},
+    {"name": "TREE",  "symbol": "T", "color": "#2E7D32"},
+    {"name": "FIRE",  "symbol": "F", "color": "#E4572E"}
   ],
   "neighborhood": {"type": "moore", "radius": 1},
   "rules": [

@@ -1,0 +1,26 @@
+{
+  "format_version": "2.0",
+  "kind": "agents",
+  "name": "Falling Sand",
+  "description": "Graunte de nisip cad in jos, sau pe diagonala daca jos este ocupat.",
+  "states": [
+    {"name": "EMPTY", "symbol": ".", "color": "#F5F3EE"},
+    {"name": "ROCK",  "symbol": "#", "color": "#555555"}
+  ],
+  "neighborhood": {"type": "moore", "radius": 1},
+  "agent_types": [
+    {"name": "SAND", "symbol": "s", "color": "#D9A441",
+     "can_enter": ["EMPTY"],
+     "attributes": {}}
+  ],
+  "agent_order": "bottom_up",
+  "agent_rules": [
+    {"agent": "SAND",
+     "do": [{"first_of": [
+       {"move": "S"},
+       {"move": "SW"},
+       {"move": "SE"}
+     ]}]}
+  ],
+  "rules": []
+}
