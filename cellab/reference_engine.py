@@ -98,6 +98,37 @@ def _apply_rule_to_cell(
     return True, rule.get("to_code")
 
 
+def _process_single_cell(
+    rule: Mapping[str, Any],
+    cells: np.ndarray,
+    result_cells: np.ndarray,
+    unresolved: np.ndarray,
+    coord: tuple[int, int],
+    offsets: list[tuple[int, int]],
+    boundary: str,
+    outside: int | None,
+    rand_matrix: np.ndarray | None,
+) -> None:
+    r, c = coord
+    if not unresolved[r, c]:
+        return
+
+    cell_val = int(cells[r, c])
+    neighbor_vals = [
+        _get_neighbor_val(cells, r, c, dr, dc, boundary, outside)
+        for dr, dc in offsets
+    ]
+    prob_val = rand_matrix[r, c] if rand_matrix is not None else None
+
+    matched, to_code = _apply_rule_to_cell(rule, cell_val, neighbor_vals, prob_val)
+    if not matched:
+        return
+
+    if to_code is not None:
+        result_cells[r, c] = to_code
+    unresolved[r, c] = False
+
+
 def _apply_rule_to_grid(
     rule: Mapping[str, Any],
     cells: np.ndarray,
@@ -109,24 +140,18 @@ def _apply_rule_to_grid(
     rand_matrix: np.ndarray | None,
 ) -> None:
     """Apply a single rule to all unresolved cells in the grid."""
-    rows, cols = cells.shape
-    for r in range(rows):
-        for c in range(cols):
-            if not unresolved[r, c]:
-                continue
-
-            cell_val = int(cells[r, c])
-            neighbor_vals = [
-                _get_neighbor_val(cells, r, c, dr, dc, boundary, outside)
-                for dr, dc in offsets
-            ]
-            prob_val = rand_matrix[r, c] if rand_matrix is not None else None
-
-            matched, to_code = _apply_rule_to_cell(rule, cell_val, neighbor_vals, prob_val)
-            if matched:
-                if to_code is not None:
-                    result_cells[r, c] = to_code
-                unresolved[r, c] = False
+    for coord in np.ndindex(cells.shape):
+        _process_single_cell(
+            rule,
+            cells,
+            result_cells,
+            unresolved,
+            coord,
+            offsets,
+            boundary,
+            outside,
+            rand_matrix,
+        )
 
 
 def step_cells_reference(
