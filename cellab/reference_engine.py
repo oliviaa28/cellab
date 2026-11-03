@@ -34,6 +34,15 @@ def _get_neighbor_val(
     return int(outside)
 
 
+def _neighbor_values(grid: Mapping[str, Any], r: int, c: int) -> list[int]:
+    """The neighbor states of cell (r, c), in the order of the neighbor offsets."""
+    values = []
+    for dr, dc in grid["offsets"]:
+        values.append(_get_neighbor_val(grid["cells"], r, c, dr, dc,
+                                        grid["boundary"], grid["outside"]))
+    return values
+
+
 def _eval_count_condition(condition: Mapping[str, Any], neighbor_vals: list[int]) -> bool:
     """Evaluate a count-based condition on neighbor values."""
     target_state = condition["count"]
@@ -46,6 +55,22 @@ def _eval_count_condition(condition: Mapping[str, Any], neighbor_vals: list[int]
     if "in" in condition and cnt not in condition["in"]:
         return False
     return True
+
+
+def _eval_all(parts: list, cell_val: int, neighbor_vals: list[int]) -> bool:
+    """True if every part is true."""
+    for part in parts:
+        if not _eval_condition_cell(part, cell_val, neighbor_vals):
+            return False
+    return True
+
+
+def _eval_any(parts: list, cell_val: int, neighbor_vals: list[int]) -> bool:
+    """True if at least one part is true."""
+    for part in parts:
+        if _eval_condition_cell(part, cell_val, neighbor_vals):
+            return True
+    return False
 
 
 def _eval_condition_cell(
@@ -64,10 +89,10 @@ def _eval_condition_cell(
         return neighbor_vals[0] == left and cell_val == center and neighbor_vals[1] == right
 
     if "all" in condition:
-        return all(_eval_condition_cell(part, cell_val, neighbor_vals) for part in condition["all"])
+        return _eval_all(condition["all"], cell_val, neighbor_vals)
 
     if "any" in condition:
-        return any(_eval_condition_cell(part, cell_val, neighbor_vals) for part in condition["any"])
+        return _eval_any(condition["any"], cell_val, neighbor_vals)
 
     if "not" in condition:
         return not _eval_condition_cell(condition["not"], cell_val, neighbor_vals)
@@ -85,7 +110,7 @@ def _apply_rule_to_cell(
     prob_val: float | None,
 ) -> tuple[bool, int | None]:
     """Check rule match. Returns (matches, to_code)."""
-    if cell_val not in set(rule["from_codes"]):
+    if cell_val not in rule["from_codes"]:
         return False, None
 
     if not _eval_condition_cell(rule.get("when"), cell_val, neighbor_vals):
@@ -100,24 +125,17 @@ def _apply_rule_to_cell(
 
 def _process_single_cell(
     rule: Mapping[str, Any],
-    cells: np.ndarray,
-    result_cells: np.ndarray,
-    unresolved: np.ndarray,
+    grid: dict[str, Any],
     coord: tuple[int, int],
-    offsets: list[tuple[int, int]],
-    boundary: str,
-    outside: int | None,
     rand_matrix: np.ndarray | None,
 ) -> None:
+    """Apply one rule to one cell, if the cell is not resolved yet."""
     r, c = coord
-    if not unresolved[r, c]:
+    if not grid["unresolved"][r, c]:
         return
 
-    cell_val = int(cells[r, c])
-    neighbor_vals = [
-        _get_neighbor_val(cells, r, c, dr, dc, boundary, outside)
-        for dr, dc in offsets
-    ]
+    cell_val = int(grid["cells"][r, c])
+    neighbor_vals = _neighbor_values(grid, r, c)
     prob_val = rand_matrix[r, c] if rand_matrix is not None else None
 
     matched, to_code = _apply_rule_to_cell(rule, cell_val, neighbor_vals, prob_val)
@@ -125,33 +143,18 @@ def _process_single_cell(
         return
 
     if to_code is not None:
-        result_cells[r, c] = to_code
-    unresolved[r, c] = False
+        grid["result_cells"][r, c] = to_code
+    grid["unresolved"][r, c] = False
 
 
 def _apply_rule_to_grid(
     rule: Mapping[str, Any],
-    cells: np.ndarray,
-    result_cells: np.ndarray,
-    unresolved: np.ndarray,
-    offsets: list[tuple[int, int]],
-    boundary: str,
-    outside: int | None,
+    grid: dict[str, Any],
     rand_matrix: np.ndarray | None,
 ) -> None:
     """Apply a single rule to all unresolved cells in the grid."""
-    for coord in np.ndindex(cells.shape):
-        _process_single_cell(
-            rule,
-            cells,
-            result_cells,
-            unresolved,
-            coord,
-            offsets,
-            boundary,
-            outside,
-            rand_matrix,
-        )
+    for coord in np.ndindex(grid["cells"].shape):
+        _process_single_cell(rule, grid, coord, rand_matrix)
 
 
 def step_cells_reference(
@@ -168,30 +171,35 @@ def step_cells_reference(
 
     world = automaton["world"]
     boundary = world["boundary"]
-    outside = int(world["outside_code"]) if boundary == "fixed" else None
-    offsets = automaton["neighbor_offsets"]
 
-    result_cells = cells.copy()
-    unresolved = np.ones(cells.shape, dtype=bool)
+    # Everything one step needs to know about the grid
+    grid = {
+        "cells": cells,
+        "result_cells": cells.copy(),
+        "unresolved": np.ones(cells.shape, dtype=bool),
+        "offsets": automaton["neighbor_offsets"],
+        "boundary": boundary,
+        "outside": int(world["outside_code"]) if boundary == "fixed" else None,
+    }
 
     for rule in automaton["compiled_rules"]:
+        if rule.get("set"):
+            raise NotImplementedError("set formulas belong to Phase 2")
+
         prob = rule.get("probability", 1.0)
         rand_matrix = rng.random(cells.shape) if prob < 1.0 else None
+        _apply_rule_to_grid(rule, grid, rand_matrix)
 
-        _apply_rule_to_grid(
-            rule,
-            cells,
-            result_cells,
-            unresolved,
-            offsets,
-            boundary,
-            outside,
-            rand_matrix,
-        )
+    values = {}
+    for name, val in state.get("values", {}).items():
+        values[name] = val.copy()
+    agents = []
+    for agent in state.get("agents", []):
+        agents.append(dict(agent))
 
     new_state = dict(state)
-    new_state["cells"] = result_cells
-    new_state["values"] = {name: val.copy() for name, val in state.get("values", {}).items()}
-    new_state["agents"] = [dict(agent) for agent in state.get("agents", [])]
+    new_state["cells"] = grid["result_cells"]
+    new_state["values"] = values
+    new_state["agents"] = agents
     new_state["generation"] = state.get("generation", 0) + 1
     return new_state
