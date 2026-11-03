@@ -114,13 +114,13 @@ def _save_state_npz(path: Path, state: dict[str, Any]) -> None:
 
 def _load_state_npz(path: Path, generation: int) -> dict[str, Any]:
     """Load a state from an .npz file."""
-    loaded = np.load(str(path))
-    cells = loaded["cells"]
     values: dict[str, np.ndarray] = {}
-    for key in loaded.files:
-        if key.startswith("val_"):
-            var_name = key[4:]
-            values[var_name] = loaded[key]
+    with np.load(str(path)) as loaded:
+        cells = loaded["cells"]
+        for key in loaded.files:
+            if key.startswith("val_"):
+                var_name = key[4:]
+                values[var_name] = loaded[key]
     return {
         "cells": cells,
         "values": values,
@@ -232,23 +232,23 @@ def load_run(run_dir: str | Path) -> dict[str, Any]:
     states: list[dict[str, Any]] = []
     gen_npz_path = resolved_dir / "generations.npz"
     if gen_npz_path.exists():
-        loaded = np.load(str(gen_npz_path))
-        for gen_idx in stored_gens:
-            cells_key = f"gen_{gen_idx}_cells"
-            if cells_key in loaded.files:
-                cells = loaded[cells_key]
-                values: dict[str, np.ndarray] = {}
-                for key in loaded.files:
-                    prefix = f"gen_{gen_idx}_val_"
-                    if key.startswith(prefix):
-                        var_name = key[len(prefix):]
-                        values[var_name] = loaded[key]
-                states.append({
-                    "cells": cells,
-                    "values": values,
-                    "agents": [],
-                    "generation": gen_idx,
-                })
+        with np.load(str(gen_npz_path)) as loaded:
+            for gen_idx in stored_gens:
+                cells_key = f"gen_{gen_idx}_cells"
+                if cells_key in loaded.files:
+                    cells = loaded[cells_key]
+                    values: dict[str, np.ndarray] = {}
+                    for key in loaded.files:
+                        prefix = f"gen_{gen_idx}_val_"
+                        if key.startswith(prefix):
+                            var_name = key[len(prefix):]
+                            values[var_name] = loaded[key]
+                    states.append({
+                        "cells": cells,
+                        "values": values,
+                        "agents": [],
+                        "generation": gen_idx,
+                    })
 
     return {
         "automaton_raw": automaton_raw,

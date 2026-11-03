@@ -38,9 +38,8 @@ def step(
         return step_cells(automaton, state, rng)
     elif kind == "agents":
         # Phase 3 – agent engine
-        # For now, we only run the cell rules.
         # When engine_agents.py is ready, import step_agents and call it.
-        return step_cells(automaton, state, rng)
+        raise NotImplementedError("Agent automata need engine_agents.py (Phase 3)")
     else:
         raise ValueError(f"Unknown automaton kind: {kind!r}")
 

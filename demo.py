@@ -25,160 +25,36 @@ import numpy as np
 
 
 # ---------------------------------------------------------------------------
-# Stub loader / validator – fallback until P1 is integrated into main
+# Loading
 # ---------------------------------------------------------------------------
 
-def _stub_load(raw_aut: dict, raw_exp: dict) -> tuple[dict[str, Any], dict[str, Any]]:
-    """Minimal loader stub per contract section 5.4."""
-    states = raw_aut["states"]
-    state_codes = {s["name"]: i for i, s in enumerate(states)}
-    state_names = [s["name"] for s in states]
-    symbols = {s["symbol"]: i for i, s in enumerate(states)}
-    code_to_symbol = {i: s["symbol"] for i, s in enumerate(states)}
-    colors = [s.get("color") for s in states]
+def _load_config(exp_path: Path, project_root: Path) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Validate and load the experiment (and its automaton) with cellab.loader.load_files.
 
-    parameters: dict[str, float] = dict(raw_aut.get("parameters", {}))
-    parameters.update(raw_exp.get("parameters", {}))
+    Prints every issue found. Stops the demo if there is any error.
+    """
+    from cellab.loader import load_files
 
-    nbr = raw_aut["neighborhood"]
-    if nbr["type"] == "moore":
-        offsets = [(-1, -1), (-1, 0), (-1, 1),
-                   (0, -1),           (0, 1),
-                   (1, -1),  (1, 0),  (1, 1)]
-    elif nbr["type"] == "von_neumann":
-        offsets = [(-1, 0), (0, -1), (0, 1), (1, 0)]
-    elif nbr["type"] == "1d":
-        offsets = [(0, -1), (0, 1)]
-    else:
-        raise ValueError(f"Unknown neighbourhood: {nbr['type']}")
+    rel_exp = str(exp_path.relative_to(project_root)).replace("\\", "/")
+    res = load_files(rel_exp, project_root=project_root)
 
-    compiled_rules: list[dict[str, Any]] = []
-    for rule in raw_aut["rules"]:
-        fr = rule["from"]
-        if fr == "*":
-            from_codes = list(state_codes.values())
-        elif isinstance(fr, list):
-            from_codes = [state_codes[n] for n in fr]
-        else:
-            from_codes = [state_codes[fr]]
+    issues = res["automaton_issues"] + res["experiment_issues"]
+    for issue in issues:
+        print(f"  [{issue['level']}] [{issue['code']}] {issue['where']}: {issue['message']}")
 
-        to_code = state_codes[rule["to"]] if "to" in rule else None
-        when = _compile_when(rule.get("when"), state_codes, parameters)
-        prob = rule.get("probability", 1.0)
-        if isinstance(prob, str):
-            prob = parameters[prob]
+    if res["automaton"] is None or res["experiment"] is None:
+        raise ValueError("Validation failed")
 
-        compiled_rules.append({
-            "from_codes": from_codes,
-            "to_code": to_code,
-            "set": rule.get("set", {}),
-            "when": when,
-            "probability": float(prob),
-        })
-
-    variable_types: dict[str, str] = {}
-    variable_defaults: dict[str, Any] = {}
-    for v in raw_aut.get("variables", []):
-        variable_types[v["name"]] = v["type"]
-        variable_defaults[v["name"]] = v["default"]
-
-    world_raw = raw_exp["world"]
-    boundary = world_raw["boundary"]
-    outside_code = None
-    outside_values: dict[str, Any] = {}
-    if boundary == "fixed" and "outside" in world_raw:
-        outside_code = state_codes[world_raw["outside"]["state"]]
-        outside_values = world_raw["outside"].get("values", {})
-
-    world = {
-        "boundary": boundary,
-        "outside_code": outside_code,
-        "outside_values": outside_values,
-        "rows": world_raw["rows"],
-        "cols": world_raw["cols"],
-    }
-
-    automaton = {
-        "format_version": raw_aut.get("format_version", "2.0"),
-        "kind": raw_aut.get("kind", "cells"),
-        "name": raw_aut["name"],
-        "description": raw_aut.get("description", ""),
-        "state_codes": state_codes,
-        "state_names": state_names,
-        "symbols": symbols,
-        "code_to_symbol": code_to_symbol,
-        "colors": colors,
-        "variable_types": variable_types,
-        "variable_defaults": variable_defaults,
-        "parameters": parameters,
-        "neighbor_offsets": offsets,
-        "neighborhood": nbr,
-        "world": world,
-        "compiled_rules": compiled_rules,
-        "rules": raw_aut.get("rules", []),
-        "agent_types": raw_aut.get("agent_types", []),
-        "agent_order": raw_aut.get("agent_order", "fixed"),
-        "agent_rules": raw_aut.get("agent_rules", []),
-    }
-
-    experiment = dict(raw_exp)
-    return automaton, experiment
+    print("✓ Schema and rule validation: OK (0 errors)")
+    return res["automaton"], res["experiment"]
 
 
-def _compile_when(when: dict | None, state_codes: dict, parameters: dict) -> dict | None:
-    if when is None:
-        return None
-    if "count" in when:
-        res: dict[str, Any] = {"count": state_codes[when["count"]]}
-        for key in ("min", "max"):
-            if key in when:
-                v = when[key]
-                res[key] = parameters[v] if isinstance(v, str) else v
-        if "in" in when:
-            res["in"] = [parameters[v] if isinstance(v, str) else v for v in when["in"]]
-        return res
-    if "pattern" in when:
-        return {"pattern": [state_codes[s] for s in when["pattern"]]}
-    if "all" in when:
-        return {"all": [_compile_when(c, state_codes, parameters) for c in when["all"]]}
-    if "any" in when:
-        return {"any": [_compile_when(c, state_codes, parameters) for c in when["any"]]}
-    if "not" in when:
-        return {"not": _compile_when(when["not"], state_codes, parameters)}
-    return when
-
-
-def _validate_if_possible(raw_aut: dict, raw_exp: dict) -> None:
-    try:
-        from cellab.validator import validate_automaton, validate_experiment
-        issues = validate_automaton(raw_aut) + validate_experiment(raw_exp, raw_aut)
-        errors = [i for i in issues if i["level"] == "error"]
-        if errors:
-            print("Validation errors detected:")
-            for err in errors:
-                print(f"  [{err['code']}] {err['where']}: {err['message']}")
-            raise ValueError("Validation failed")
-        print("✓ Schema and rule validation: OK (0 errors)")
-    except (ImportError, ModuleNotFoundError):
-        print("✓ Basic validation: format valid (validator.py will be integrated from P1).")
-
-
-def _load_config(aut_path: Path, exp_path: Path, project_root: Path) -> tuple[dict[str, Any], dict[str, Any]]:
-    """Load automaton and experiment using cellab.loader.load_files if available, or stub fallback."""
-    try:
-        from cellab.loader import load_files
-        rel_exp = str(exp_path.relative_to(project_root)).replace("\\", "/")
-        res = load_files(rel_exp, project_root=project_root)
-        if res.get("automaton") is not None and res.get("experiment") is not None:
-            return res["automaton"], res["experiment"]
-    except (ImportError, ModuleNotFoundError, Exception):
-        pass
-
-    with open(aut_path, encoding="utf-8") as f:
-        raw_aut = json.load(f)
-    with open(exp_path, encoding="utf-8") as f:
-        raw_exp = json.load(f)
-    return _stub_load(raw_aut, raw_exp)
+def _code_to_symbol(automaton: dict[str, Any]) -> dict[int, str]:
+    """Return a mapping from state code to its symbol character."""
+    result: dict[int, str] = {}
+    for symbol, code in automaton["symbols"].items():
+        result[code] = symbol
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -303,11 +179,8 @@ def main() -> None:
     print("=" * 70)
     print()
 
-    # Step 1: Validation
-    _validate_if_possible(raw_aut, raw_exp)
-
-    # Step 2: Load automaton + experiment
-    automaton, experiment = _load_config(aut_path, exp_path, project_root)
+    # Step 1 + 2: Validate and load automaton + experiment
+    automaton, experiment = _load_config(exp_path, project_root)
 
     # Step 3: Build initial state
     raw_seed = raw_exp.get("seed")
@@ -350,7 +223,7 @@ def main() -> None:
         print(f"\n▶ Generation {gen_i:2d} | Cell counts: {counts_str}")
 
         if is_small_grid:
-            code_to_sym = automaton["code_to_symbol"]
+            code_to_sym = _code_to_symbol(automaton)
             cell_rows, cell_cols = cells.shape
             for r in range(cell_rows):
                 line = "".join(code_to_sym.get(int(cells[r, c]), "?") for c in range(cell_cols))
