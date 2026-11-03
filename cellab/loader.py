@@ -25,16 +25,20 @@ from cellab.validator import has_errors, make_issue, validate_automaton, validat
 # Everything at once, from files
 # =====================================================================
 
-def load_files(experiment_path) -> dict:
+def load_files(experiment_path, project_root=PROJECT_ROOT) -> dict:
     """Read, validate and load an experiment and its automaton.
 
     Returns {"automaton": ..., "experiment": ..., "automaton_issues": [...], "experiment_issues": [...]}.
     If there is any error, "automaton" and "experiment" are None. Warnings do not stop loading.
+
+    The automaton path written inside the experiment must stay inside project_root
+    (normally the project folder; tests can pass a temporary folder).
     """
     result = {"automaton": None, "experiment": None, "automaton_issues": [], "experiment_issues": []}
 
-    # 1. read the experiment
-    raw_exp, problem = read_json(experiment_path)
+    # 1. read the experiment (its path comes from the caller, not from a file)
+    experiment_file = Path(project_root) / experiment_path
+    raw_exp, problem = read_json(experiment_file, experiment_path)
     if problem is not None:
         result["experiment_issues"].append(problem)
         return result
@@ -43,8 +47,14 @@ def load_files(experiment_path) -> dict:
         result["experiment_issues"].append(make_issue("SCHEMA", [], message))
         return result
 
-    # 2. read the automaton it points to
-    raw_aut, problem = read_json(raw_exp["automaton"])
+    # 2. read the automaton it points to; that path comes from the file, so it is checked first
+    automaton_file = safe_path(raw_exp["automaton"], project_root)
+    if automaton_file is None:
+        message = f"The automaton path '{raw_exp['automaton']}' must stay inside the project folder."
+        result["experiment_issues"].append(make_issue("SCHEMA", ["automaton"], message))
+        return result
+
+    raw_aut, problem = read_json(automaton_file, raw_exp["automaton"])
     if problem is not None:
         problem["message"] = "Cannot use the automaton file: " + problem["message"]
         problem["where"] = "/automaton"
@@ -66,26 +76,31 @@ def load_files(experiment_path) -> dict:
     return result
 
 
-def read_json(path):
-    """Return (data, None) if the file can be read, or (None, issue) if not."""
-    full_path = project_path(path)
+def safe_path(path: str, project_root) -> Path | None:
+    """The full path, or None if it leaves the project folder.
+
+    A path written inside a file is never trusted: "../../secret.json" or
+    "C:/Windows/..." could make us read any file on the computer.
+    """
+    root = Path(project_root).resolve()
+    full_path = (root / path).resolve()
+    if not full_path.is_relative_to(root):
+        return None
+    return full_path
+
+
+def read_json(full_path: Path, shown_name):
+    """Return (data, None) if the file can be read, or (None, issue) if not.
+    shown_name is the path as the user wrote it, used in messages."""
     try:
         with open(full_path, encoding="utf-8") as file:
             return json.load(file), None
     except FileNotFoundError:
-        return None, make_issue("SCHEMA", [], f"File '{path}' does not exist.")
+        return None, make_issue("SCHEMA", [], f"File '{shown_name}' does not exist.")
     except json.JSONDecodeError as error:
-        message = (f"File '{path}' is not valid JSON: {error.msg} "
+        message = (f"File '{shown_name}' is not valid JSON: {error.msg} "
                    f"(line {error.lineno}, column {error.colno}).")
         return None, make_issue("SCHEMA", [], message)
-
-
-def project_path(path) -> Path:
-    """Paths in our files are relative to the project folder, wherever you run from."""
-    path = Path(path)
-    if path.is_absolute():
-        return path
-    return PROJECT_ROOT / path
 
 
 # =====================================================================
@@ -201,16 +216,7 @@ def _compile_rule(rule: dict, automaton: dict) -> dict:
 def _compile_condition(condition: dict, codes: dict, parameters: dict) -> dict:
     """A condition with names replaced by codes and parameters by numbers."""
     if "count" in condition:
-        compiled = {"count": codes[condition["count"]]}
-        if "min" in condition:
-            compiled["min"] = int(_number(condition["min"], parameters))
-        if "max" in condition:
-            compiled["max"] = int(_number(condition["max"], parameters))
-        if "in" in condition:
-            compiled["in"] = []
-            for value in condition["in"]:
-                compiled["in"].append(int(_number(value, parameters)))
-        return compiled
+        return _compile_count(condition, codes, parameters)
 
     if "pattern" in condition:
         pattern_codes = []
@@ -230,6 +236,20 @@ def _compile_condition(condition: dict, codes: dict, parameters: dict) -> dict:
 
     # "expr": kept as text; the formula interpreter comes in Phase 2
     return {"expr": condition["expr"]}
+
+
+def _compile_count(condition: dict, codes: dict, parameters: dict) -> dict:
+    """{"count": "FIRE", "min": "k"} becomes {"count": 2, "min": 3}."""
+    compiled = {"count": codes[condition["count"]]}
+    if "min" in condition:
+        compiled["min"] = int(_number(condition["min"], parameters))
+    if "max" in condition:
+        compiled["max"] = int(_number(condition["max"], parameters))
+    if "in" in condition:
+        compiled["in"] = []
+        for value in condition["in"]:
+            compiled["in"].append(int(_number(value, parameters)))
+    return compiled
 
 
 def _number(value, parameters: dict):

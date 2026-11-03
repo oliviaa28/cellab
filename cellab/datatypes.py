@@ -1,13 +1,10 @@
-"""Shapes of the dictionaries passed between CelLab modules (contract, sections 5.3-5.5).
-
-Named datatypes.py (not types.py) so it never clashes with Python's
-built-in "types" module.
+"""Shapes of the dictionaries passed between CelLab modules
 
 These classes do nothing at runtime. They only describe which keys a
 dictionary has and what type each value is, so the editor can warn us
 when a key is misspelled.
 
-Rule from the contract: optional fields that are missing in the JSON file
+ optional fields that are missing in the JSON file
 appear empty ([] or {}) in the loaded dictionaries, never missing.
 """
 

@@ -1,4 +1,4 @@
-"""Conventions shared by the loader and the validator (contract, section 5.2).
+"""Conventions shared by the loader and the validator 
 
 Everything here is written once, so the loader and the validator can never
 disagree about, for example, the order of the neighbors.
@@ -8,14 +8,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-# The project folder, found from the location of this file
-# (cellab/conventions.py -> its parent is cellab/, the parent of that is the project).
+# The project folder
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 FORMAT_VERSION = "2.0"
 
-# Neighbor offsets as (row change, column change), in the contract order.
-# Row 0 is at the top, so N (up) is row - 1.
+# Neighbor offsets as (row change, column change)
 NEIGHBOR_OFFSETS = {
     # NW, N, NE, W, E, SW, S, SE
     "moore": [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)],

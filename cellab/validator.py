@@ -239,56 +239,72 @@ def _check_variables(raw_aut: dict) -> list:
 def _check_rules(raw_aut: dict) -> list:
     """Every name used in a rule must be declared; a rule must change something."""
     issues = []
-    states = _names(raw_aut["states"])
-    variables = _names(raw_aut.get("variables", []))
-    parameters = raw_aut.get("parameters", {})
-    is_1d = raw_aut["neighborhood"]["type"] == "1d"
+    names = {
+        "states": _names(raw_aut["states"]),
+        "variables": _names(raw_aut.get("variables", [])),
+        "parameters": raw_aut.get("parameters", {}),
+        "is_1d": raw_aut["neighborhood"]["type"] == "1d",
+    }
 
     for index, rule in enumerate(raw_aut["rules"]):
         path = ["rules", index]
-
-        # from: one name or a list of names; "*" means any state
-        if isinstance(rule["from"], str):
-            if rule["from"] != "*":
-                issues += _unknown_state(rule["from"], path + ["from"], states)
-        else:
-            for position, name in enumerate(rule["from"]):
-                if name != "*":
-                    issues += _unknown_state(name, path + ["from", position], states)
-
-        if "to" in rule:
-            issues += _unknown_state(rule["to"], path + ["to"], states)
-
-        for variable in rule.get("set", {}):
-            issues += _unknown_variable(variable, path + ["set", variable], variables)
-
-        if "to" not in rule and len(rule.get("set", {})) == 0:
-            message = "Rule has neither 'to' nor 'set', so it changes nothing."
-            issues.append(make_issue("EMPTY_RULE", path, message))
-
-        issues += _unknown_parameter(rule.get("probability", 1), path + ["probability"], parameters)
-
+        issues += _check_rule_parts(rule, path, names)
         for condition, condition_path in _rule_conditions(rule, path):
-            if "count" in condition:
-                issues += _unknown_state(condition["count"], condition_path + ["count"], states)
-                for key in ["min", "max"]:
-                    if key in condition:
-                        issues += _unknown_parameter(condition[key], condition_path + [key], parameters)
-                for position, value in enumerate(condition.get("in", [])):
-                    issues += _unknown_parameter(value, condition_path + ["in", position], parameters)
+            issues += _check_condition_names(condition, condition_path, names)
+    return issues
 
-            elif "pattern" in condition:
-                pattern = condition["pattern"]
-                if not is_1d:
-                    message = "'pattern' can only be used with a 1d neighborhood."
-                    issues.append(make_issue("PATTERN_NOT_1D", condition_path + ["pattern"], message))
-                elif len(pattern) != 3:
-                    message = f"'pattern' must have exactly 3 elements [left, center, right], not {len(pattern)}."
-                    issues.append(make_issue("PATTERN_NOT_1D", condition_path + ["pattern"], message))
-                for position, name in enumerate(pattern):
-                    issues += _unknown_state(name, condition_path + ["pattern", position], states)
 
-            # "expr": formulas are checked in Phase 2 (BAD_EXPRESSION, EXPRESSION_TYPE)
+def _check_rule_parts(rule: dict, path: list, names: dict) -> list:
+    """from, to, set and probability of one rule."""
+    issues = []
+
+    # from: one name or a list of names; "*" means any state
+    if isinstance(rule["from"], str):
+        if rule["from"] != "*":
+            issues += _unknown_state(rule["from"], path + ["from"], names["states"])
+    else:
+        for position, name in enumerate(rule["from"]):
+            if name != "*":
+                issues += _unknown_state(name, path + ["from", position], names["states"])
+
+    if "to" in rule:
+        issues += _unknown_state(rule["to"], path + ["to"], names["states"])
+
+    for variable in rule.get("set", {}):
+        issues += _unknown_variable(variable, path + ["set", variable], names["variables"])
+
+    if "to" not in rule and len(rule.get("set", {})) == 0:
+        message = "Rule has neither 'to' nor 'set', so it changes nothing."
+        issues.append(make_issue("EMPTY_RULE", path, message))
+
+    issues += _unknown_parameter(rule.get("probability", 1), path + ["probability"], names["parameters"])
+    return issues
+
+
+def _check_condition_names(condition: dict, path: list, names: dict) -> list:
+    """One simple condition: the states and parameters it uses must exist."""
+    issues = []
+
+    if "count" in condition:
+        issues += _unknown_state(condition["count"], path + ["count"], names["states"])
+        for key in ["min", "max"]:
+            if key in condition:
+                issues += _unknown_parameter(condition[key], path + [key], names["parameters"])
+        for position, value in enumerate(condition.get("in", [])):
+            issues += _unknown_parameter(value, path + ["in", position], names["parameters"])
+
+    elif "pattern" in condition:
+        pattern = condition["pattern"]
+        if not names["is_1d"]:
+            message = "'pattern' can only be used with a 1d neighborhood."
+            issues.append(make_issue("PATTERN_NOT_1D", path + ["pattern"], message))
+        elif len(pattern) != 3:
+            message = f"'pattern' must have exactly 3 elements [left, center, right], not {len(pattern)}."
+            issues.append(make_issue("PATTERN_NOT_1D", path + ["pattern"], message))
+        for position, name in enumerate(pattern):
+            issues += _unknown_state(name, path + ["pattern", position], names["states"])
+
+    # "expr": formulas are checked in Phase 2 (BAD_EXPRESSION, EXPRESSION_TYPE)
     return issues
 
 
@@ -314,29 +330,33 @@ def _check_values(raw_aut: dict, parameters: dict, overrides) -> list:
                              [raw_probability], overrides)
 
         for condition, condition_path in _rule_conditions(rule, path):
-            if "count" not in condition:
-                continue
-
-            for key in ["min", "max"]:
-                if key in condition:
-                    problem = _count_problem(_resolve(condition[key], parameters), neighbor_count)
-                    if problem != "":
-                        _add_value_issue(issues, "IMPOSSIBLE_COUNT", condition_path + [key],
-                                         f"'{key}' {problem}", [condition[key]], overrides)
-
-            for position, raw_value in enumerate(condition.get("in", [])):
-                problem = _count_problem(_resolve(raw_value, parameters), neighbor_count)
-                if problem != "":
-                    _add_value_issue(issues, "IMPOSSIBLE_COUNT", condition_path + ["in", position],
-                                     f"Value {problem}", [raw_value], overrides)
-
-            low = _resolve(condition.get("min"), parameters)
-            high = _resolve(condition.get("max"), parameters)
-            if low is not None and high is not None and low > high:
-                message = f"'min' ({low}) is greater than 'max' ({high}), so the condition is never true."
-                _add_value_issue(issues, "IMPOSSIBLE_COUNT", condition_path, message,
-                                 [condition.get("min"), condition.get("max")], overrides)
+            if "count" in condition:
+                _check_count_values(issues, condition, condition_path, parameters, neighbor_count, overrides)
     return issues
+
+
+def _check_count_values(issues: list, condition: dict, path: list, parameters: dict,
+                        neighbor_count: int, overrides) -> None:
+    """min, max and in of one count condition must be possible numbers of neighbors."""
+    for key in ["min", "max"]:
+        if key in condition:
+            problem = _count_problem(_resolve(condition[key], parameters), neighbor_count)
+            if problem != "":
+                _add_value_issue(issues, "IMPOSSIBLE_COUNT", path + [key],
+                                 f"'{key}' {problem}", [condition[key]], overrides)
+
+    for position, raw_value in enumerate(condition.get("in", [])):
+        problem = _count_problem(_resolve(raw_value, parameters), neighbor_count)
+        if problem != "":
+            _add_value_issue(issues, "IMPOSSIBLE_COUNT", path + ["in", position],
+                             f"Value {problem}", [raw_value], overrides)
+
+    low = _resolve(condition.get("min"), parameters)
+    high = _resolve(condition.get("max"), parameters)
+    if low is not None and high is not None and low > high:
+        message = f"'min' ({low}) is greater than 'max' ({high}), so the condition is never true."
+        _add_value_issue(issues, "IMPOSSIBLE_COUNT", path, message,
+                         [condition.get("min"), condition.get("max")], overrides)
 
 
 def _count_problem(value, neighbor_count: int) -> str:
@@ -380,17 +400,8 @@ def _check_unreachable_rules(raw_aut: dict) -> list:
             issues.append(make_issue("UNREACHABLE_RULE", ["rules", index], message, level="warning"))
             continue
 
-        my_states = _from_names(rule, states)
         for earlier_index in range(index):
-            earlier = rules[earlier_index]
-            no_condition = "when" not in earlier
-            always = _resolve(earlier.get("probability", 1), parameters) == 1
-            covers_mine = True
-            for state in my_states:
-                if state not in _from_names(earlier, states):
-                    covers_mine = False
-
-            if no_condition and always and covers_mine:
+            if _always_wins_before(rules[earlier_index], rule, states, parameters):
                 message = (f"Rule {earlier_index} always applies first to the same states, "
                            f"so this rule never applies.")
                 issues.append(make_issue("UNREACHABLE_RULE", ["rules", index], message, level="warning"))
@@ -398,46 +409,60 @@ def _check_unreachable_rules(raw_aut: dict) -> list:
     return issues
 
 
+def _always_wins_before(earlier: dict, rule: dict, states: list, parameters: dict) -> bool:
+    """True if `earlier` has no condition, probability 1 and covers all the states of `rule`."""
+    if "when" in earlier:
+        return False
+    if _resolve(earlier.get("probability", 1), parameters) != 1:
+        return False
+    earlier_states = _from_names(earlier, states)
+    for state in _from_names(rule, states):
+        if state not in earlier_states:
+            return False
+    return True
+
+
 def _check_unused(raw_aut: dict) -> list:
     """Warnings for states and parameters that no rule mentions."""
     issues = []
-    states = _names(raw_aut["states"])
-    used_states = []
-    used_parameters = []
-    formulas = []
+    used = _collect_used_names(raw_aut)
 
-    # 1. collect everything the rules mention
-    for index, rule in enumerate(raw_aut["rules"]):
-        used_states += _from_names(rule, states)
-        if "to" in rule:
-            used_states.append(rule["to"])
-        used_parameters += _parameter_names([rule.get("probability")])
-        for formula in rule.get("set", {}).values():
-            formulas.append(formula)
-
-        for condition, condition_path in _rule_conditions(rule, ["rules", index]):
-            if "count" in condition:
-                used_states.append(condition["count"])
-                used_parameters += _parameter_names([condition.get("min"), condition.get("max")])
-                used_parameters += _parameter_names(condition.get("in", []))
-            elif "pattern" in condition:
-                used_states += condition["pattern"]
-            elif "expr" in condition:
-                formulas.append(condition["expr"])
-
-    # 2. report what was never mentioned.
     # Agent automata also use states in agent_rules; those are checked in Phase 3.
     if raw_aut["kind"] == "cells":
-        for index, name in enumerate(states):
-            if name not in used_states:
+        for index, name in enumerate(_names(raw_aut["states"])):
+            if name not in used["states"]:
                 message = f"State '{name}' is not used by any rule."
                 issues.append(make_issue("UNUSED_STATE", ["states", index], message, level="warning"))
 
     for name in raw_aut.get("parameters", {}):
-        if name not in used_parameters and not _appears_in_formulas(name, formulas):
+        if name not in used["parameters"] and not _appears_in_formulas(name, used["formulas"]):
             message = f"Parameter '{name}' is not used by any rule."
             issues.append(make_issue("UNUSED_PARAMETER", ["parameters", name], message, level="warning"))
     return issues
+
+
+def _collect_used_names(raw_aut: dict) -> dict:
+    """Everything the rules mention: {"states": [...], "parameters": [...], "formulas": [...]}."""
+    used = {"states": [], "parameters": [], "formulas": []}
+    states = _names(raw_aut["states"])
+
+    for index, rule in enumerate(raw_aut["rules"]):
+        used["states"].extend(_from_names(rule, states))
+        if "to" in rule:
+            used["states"].append(rule["to"])
+        used["parameters"].extend(_parameter_names([rule.get("probability")]))
+        used["formulas"].extend(rule.get("set", {}).values())
+
+        for condition, _path in _rule_conditions(rule, ["rules", index]):
+            if "count" in condition:
+                used["states"].append(condition["count"])
+                used["parameters"].extend(_parameter_names([condition.get("min"), condition.get("max")]))
+                used["parameters"].extend(_parameter_names(condition.get("in", [])))
+            elif "pattern" in condition:
+                used["states"].extend(condition["pattern"])
+            elif "expr" in condition:
+                used["formulas"].append(condition["expr"])
+    return used
 
 
 def _appears_in_formulas(name: str, formulas: list) -> bool:
@@ -487,7 +512,6 @@ def _check_world(raw_exp: dict, raw_aut: dict) -> list:
 
 def _check_initial_cells(raw_exp: dict, raw_aut: dict) -> list:
     """The initial cells, for each of the 4 modes."""
-    issues = []
     cells = raw_exp["initial_state"]["cells"]
     path = ["initial_state", "cells"]
     states = _names(raw_aut["states"])
@@ -495,39 +519,49 @@ def _check_initial_cells(raw_exp: dict, raw_aut: dict) -> list:
     cols = raw_exp["world"]["cols"]
 
     if cells["mode"] == "fill":
-        issues += _unknown_state(cells["state"], path + ["state"], states)
-
-    elif cells["mode"] == "random":
-        total = 0
-        for name, share in cells["proportions"].items():
-            issues += _unknown_state(name, path + ["proportions", name], states)
-            total = total + share
-        if abs(total - 1) > 1e-9:
-            message = f"Proportions must add up to 1, but they add up to {total}."
-            issues.append(make_issue("PROPORTIONS_SUM", path + ["proportions"], message))
-
-    elif cells["mode"] == "manual":
-        issues += _check_grid_size(cells["grid"], rows, cols, path + ["grid"], "cells")
+        return _unknown_state(cells["state"], path + ["state"], states)
+    if cells["mode"] == "random":
+        return _check_proportions(cells["proportions"], path + ["proportions"], states)
+    if cells["mode"] == "manual":
+        issues = _check_grid_size(cells["grid"], rows, cols, path + ["grid"], "cells")
         issues += _check_symbols(cells["grid"], path + ["grid"], raw_aut)
+        return issues
+    return _check_pattern(cells, path, raw_aut, rows, cols)
 
-    elif cells["mode"] == "pattern":
-        pattern = cells["pattern"]
-        issues += _unknown_state(cells["background"], path + ["background"], states)
 
-        width = len(pattern[0])
-        for index, line in enumerate(pattern):
-            if len(line) != width:
-                message = f"All rows of the pattern must have the same length ({width})."
-                issues.append(make_issue("GRID_SIZE", path + ["pattern", index], message))
-        issues += _check_symbols(pattern, path + ["pattern"], raw_aut)
+def _check_proportions(proportions: dict, path: list, states: list) -> list:
+    """Known states, and the shares add up to 1."""
+    issues = []
+    total = 0
+    for name, share in proportions.items():
+        issues += _unknown_state(name, path + [name], states)
+        total = total + share
+    if abs(total - 1) > 1e-9:
+        message = f"Proportions must add up to 1, but they add up to {total}."
+        issues.append(make_issue("PROPORTIONS_SUM", path, message))
+    return issues
 
-        top = cells["position"][0]
-        left = cells["position"][1]
-        fits = top >= 0 and left >= 0 and top + len(pattern) <= rows and left + width <= cols
-        if not fits:
-            message = (f"A {len(pattern)}x{width} pattern at row {top}, column {left} "
-                       f"does not fit in a {rows}x{cols} world.")
-            issues.append(make_issue("OUT_OF_BOUNDS", path, message))
+
+def _check_pattern(cells: dict, path: list, raw_aut: dict, rows: int, cols: int) -> list:
+    """Pattern mode: known background, a rectangular pattern of known symbols, inside the world."""
+    issues = []
+    pattern = cells["pattern"]
+    issues += _unknown_state(cells["background"], path + ["background"], _names(raw_aut["states"]))
+
+    width = len(pattern[0])
+    for index, line in enumerate(pattern):
+        if len(line) != width:
+            message = f"All rows of the pattern must have the same length ({width})."
+            issues.append(make_issue("GRID_SIZE", path + ["pattern", index], message))
+    issues += _check_symbols(pattern, path + ["pattern"], raw_aut)
+
+    top = cells["position"][0]
+    left = cells["position"][1]
+    fits = top >= 0 and left >= 0 and top + len(pattern) <= rows and left + width <= cols
+    if not fits:
+        message = (f"A {len(pattern)}x{width} pattern at row {top}, column {left} "
+                   f"does not fit in a {rows}x{cols} world.")
+        issues.append(make_issue("OUT_OF_BOUNDS", path, message))
     return issues
 
 
@@ -579,12 +613,19 @@ def _check_initial_values(raw_exp: dict, raw_aut: dict) -> list:
             issues += _check_grid_size(spec["grid"], rows, cols, path + ["grid"], "values")
 
         if spec["mode"] == "constant":
-            for index, point in enumerate(spec.get("points", [])):
-                row = point["position"][0]
-                col = point["position"][1]
-                if not (0 <= row < rows and 0 <= col < cols):
-                    message = f"Point [{row}, {col}] is outside the {rows}x{cols} world."
-                    issues.append(make_issue("OUT_OF_BOUNDS", path + ["points", index], message))
+            issues += _check_points(spec.get("points", []), path + ["points"], rows, cols)
+    return issues
+
+
+def _check_points(points: list, path: list, rows: int, cols: int) -> list:
+    """Every point of a constant value must be inside the world."""
+    issues = []
+    for index, point in enumerate(points):
+        row = point["position"][0]
+        col = point["position"][1]
+        if not (0 <= row < rows and 0 <= col < cols):
+            message = f"Point [{row}, {col}] is outside the {rows}x{cols} world."
+            issues.append(make_issue("OUT_OF_BOUNDS", path + [index], message))
     return issues
 
 

@@ -112,22 +112,33 @@ def test_broken_json_is_reported_not_raised(tmp_path):
     assert result["automaton"] is None
     assert "not valid JSON" in result["experiment_issues"][0]["message"]
 
-
 def test_invalid_automaton_stops_loading(tmp_path):
+    # A small temporary "project": tmp_path/automata/bad_automaton.json + tmp_path/experiment.json
     raw_aut = json.loads((PROJECT_ROOT / "automata" / "forest_fire.json").read_text(encoding="utf-8"))
     raw_aut["rules"][0]["to"] = "ASH"
-    aut_path = tmp_path / "bad_automaton.json"
-    aut_path.write_text(json.dumps(raw_aut), encoding="utf-8")
+    (tmp_path / "automata").mkdir()
+    (tmp_path / "automata" / "bad_automaton.json").write_text(json.dumps(raw_aut), encoding="utf-8")
 
     raw_exp = json.loads((PROJECT_ROOT / "experiments" / "forest_fire_manual.json").read_text(encoding="utf-8"))
-    raw_exp["automaton"] = str(aut_path)
-    exp_path = tmp_path / "experiment.json"
-    exp_path.write_text(json.dumps(raw_exp), encoding="utf-8")
+    raw_exp["automaton"] = "automata/bad_automaton.json"
+    (tmp_path / "experiment.json").write_text(json.dumps(raw_exp), encoding="utf-8")
 
-    result = load_files(exp_path)
+    result = load_files("experiment.json", project_root=tmp_path)
     assert result["automaton"] is None
     assert result["automaton_issues"][0]["code"] == "UNKNOWN_STATE"
     assert result["automaton_issues"][0]["where"] == "/rules/0/to"
+
+
+def test_automaton_path_cannot_leave_the_project(tmp_path):
+    # A path written inside a file must not be able to read files outside the project.
+    raw_exp = json.loads((PROJECT_ROOT / "experiments" / "forest_fire_manual.json").read_text(encoding="utf-8"))
+    raw_exp["automaton"] = "../../secret.json"
+    (tmp_path / "experiment.json").write_text(json.dumps(raw_exp), encoding="utf-8")
+
+    result = load_files("experiment.json", project_root=tmp_path)
+    assert result["automaton"] is None
+    assert result["experiment_issues"][0]["where"] == "/automaton"
+    assert "inside the project folder" in result["experiment_issues"][0]["message"]
 
 
 def test_loading_does_not_change_the_raw_data():
