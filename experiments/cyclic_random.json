@@ -1,0 +1,19 @@
+{
+  "format_version": "2.0",
+  "automaton": "automata/cyclic.json",
+  "world": {"rows": 30, "cols": 30, "boundary": "toroidal"},
+  "initial_state": {
+    "cells": {
+      "mode": "random",
+      "proportions": {
+        "S0": 0.25,
+        "S1": 0.25,
+        "S2": 0.25,
+        "S3": 0.25
+      }
+    }
+  },
+  "generations": 20,
+  "storage": {"mode": "all"},
+  "seed": 42
+}
