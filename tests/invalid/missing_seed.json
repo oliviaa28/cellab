@@ -1,0 +1,34 @@
+{
+  "description": "Random initial cells without a seed.",
+  "expect": {
+    "file": "experiment",
+    "code": "MISSING_SEED",
+    "where": ""
+  },
+  "automaton": "automata/forest_fire.json",
+  "experiment": {
+    "format_version": "2.0",
+    "automaton": "automata/forest_fire.json",
+    "world": {
+      "rows": 3,
+      "cols": 3,
+      "boundary": "fixed",
+      "outside": {
+        "state": "EMPTY"
+      }
+    },
+    "initial_state": {
+      "cells": {
+        "mode": "random",
+        "proportions": {
+          "TREE": 0.5,
+          "EMPTY": 0.5
+        }
+      }
+    },
+    "generations": 5,
+    "storage": {
+      "mode": "all"
+    }
+  }
+}

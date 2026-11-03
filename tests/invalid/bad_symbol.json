@@ -1,0 +1,48 @@
+{
+  "description": "Symbol with two characters.",
+  "expect": {
+    "file": "automaton",
+    "code": "BAD_SYMBOL",
+    "where": "/states/1/symbol"
+  },
+  "automaton": {
+    "format_version": "2.0",
+    "kind": "cells",
+    "name": "Forest Fire",
+    "description": "Deterministic forest fire: a tree with at least one burning neighbor catches fire, fire burns out.",
+    "states": [
+      {
+        "name": "EMPTY",
+        "symbol": ".",
+        "color": "#2B2B2B"
+      },
+      {
+        "name": "TREE",
+        "symbol": "TR"
+      },
+      {
+        "name": "FIRE",
+        "symbol": "F",
+        "color": "#FF4500"
+      }
+    ],
+    "neighborhood": {
+      "type": "moore",
+      "radius": 1
+    },
+    "rules": [
+      {
+        "from": "TREE",
+        "to": "FIRE",
+        "when": {
+          "count": "FIRE",
+          "min": 1
+        }
+      },
+      {
+        "from": "FIRE",
+        "to": "EMPTY"
+      }
+    ]
+  }
+}
