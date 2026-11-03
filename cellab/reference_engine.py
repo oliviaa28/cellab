@@ -98,6 +98,37 @@ def _apply_rule_to_cell(
     return True, rule.get("to_code")
 
 
+def _apply_rule_to_grid(
+    rule: Mapping[str, Any],
+    cells: np.ndarray,
+    result_cells: np.ndarray,
+    unresolved: np.ndarray,
+    offsets: list[tuple[int, int]],
+    boundary: str,
+    outside: int | None,
+    rand_matrix: np.ndarray | None,
+) -> None:
+    """Apply a single rule to all unresolved cells in the grid."""
+    rows, cols = cells.shape
+    for r in range(rows):
+        for c in range(cols):
+            if not unresolved[r, c]:
+                continue
+
+            cell_val = int(cells[r, c])
+            neighbor_vals = [
+                _get_neighbor_val(cells, r, c, dr, dc, boundary, outside)
+                for dr, dc in offsets
+            ]
+            prob_val = rand_matrix[r, c] if rand_matrix is not None else None
+
+            matched, to_code = _apply_rule_to_cell(rule, cell_val, neighbor_vals, prob_val)
+            if matched:
+                if to_code is not None:
+                    result_cells[r, c] = to_code
+                unresolved[r, c] = False
+
+
 def step_cells_reference(
     automaton: Mapping[str, Any],
     state: Mapping[str, Any],
@@ -115,31 +146,23 @@ def step_cells_reference(
     outside = int(world["outside_code"]) if boundary == "fixed" else None
     offsets = automaton["neighbor_offsets"]
 
-    rows, cols = cells.shape
     result_cells = cells.copy()
-    unresolved = np.ones((rows, cols), dtype=bool)
+    unresolved = np.ones(cells.shape, dtype=bool)
 
     for rule in automaton["compiled_rules"]:
         prob = rule.get("probability", 1.0)
-        rand_matrix = rng.random((rows, cols)) if prob < 1.0 else None
+        rand_matrix = rng.random(cells.shape) if prob < 1.0 else None
 
-        for r in range(rows):
-            for c in range(cols):
-                if not unresolved[r, c]:
-                    continue
-
-                cell_val = int(cells[r, c])
-                neighbor_vals = [
-                    _get_neighbor_val(cells, r, c, dr, dc, boundary, outside)
-                    for dr, dc in offsets
-                ]
-                prob_val = rand_matrix[r, c] if rand_matrix is not None else None
-
-                matched, to_code = _apply_rule_to_cell(rule, cell_val, neighbor_vals, prob_val)
-                if matched:
-                    if to_code is not None:
-                        result_cells[r, c] = to_code
-                    unresolved[r, c] = False
+        _apply_rule_to_grid(
+            rule,
+            cells,
+            result_cells,
+            unresolved,
+            offsets,
+            boundary,
+            outside,
+            rand_matrix,
+        )
 
     new_state = dict(state)
     new_state["cells"] = result_cells
