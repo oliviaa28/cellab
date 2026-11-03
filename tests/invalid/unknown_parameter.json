@@ -1,0 +1,50 @@
+{
+  "description": "Probability names a parameter that does not exist.",
+  "expect": {
+    "file": "automaton",
+    "code": "UNKNOWN_PARAMETER",
+    "where": "/rules/0/probability"
+  },
+  "automaton": {
+    "format_version": "2.0",
+    "kind": "cells",
+    "name": "Forest Fire",
+    "description": "Deterministic forest fire: a tree with at least one burning neighbor catches fire, fire burns out.",
+    "states": [
+      {
+        "name": "EMPTY",
+        "symbol": ".",
+        "color": "#2B2B2B"
+      },
+      {
+        "name": "TREE",
+        "symbol": "T",
+        "color": "#2E8B57"
+      },
+      {
+        "name": "FIRE",
+        "symbol": "F",
+        "color": "#FF4500"
+      }
+    ],
+    "neighborhood": {
+      "type": "moore",
+      "radius": 1
+    },
+    "rules": [
+      {
+        "from": "TREE",
+        "to": "FIRE",
+        "when": {
+          "count": "FIRE",
+          "min": 1
+        },
+        "probability": "p_spread"
+      },
+      {
+        "from": "FIRE",
+        "to": "EMPTY"
+      }
+    ]
+  }
+}

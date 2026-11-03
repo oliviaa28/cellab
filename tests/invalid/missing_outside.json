@@ -1,0 +1,28 @@
+{
+  "description": "Fixed boundary without 'outside'.",
+  "expect": {
+    "file": "experiment",
+    "code": "MISSING_OUTSIDE",
+    "where": "/world"
+  },
+  "automaton": "automata/forest_fire.json",
+  "experiment": {
+    "format_version": "2.0",
+    "automaton": "automata/forest_fire.json",
+    "world": {
+      "rows": 3,
+      "cols": 3,
+      "boundary": "fixed"
+    },
+    "initial_state": {
+      "cells": {
+        "mode": "fill",
+        "state": "TREE"
+      }
+    },
+    "generations": 5,
+    "storage": {
+      "mode": "all"
+    }
+  }
+}

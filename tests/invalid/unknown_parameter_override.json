@@ -1,0 +1,35 @@
+{
+  "description": "Experiment overrides a parameter the automaton does not have.",
+  "expect": {
+    "file": "experiment",
+    "code": "UNKNOWN_PARAMETER",
+    "where": "/parameters/pp"
+  },
+  "automaton": "automata/forest_fire_stochastic.json",
+  "experiment": {
+    "format_version": "2.0",
+    "automaton": "automata/forest_fire_stochastic.json",
+    "world": {
+      "rows": 3,
+      "cols": 3,
+      "boundary": "fixed",
+      "outside": {
+        "state": "EMPTY"
+      }
+    },
+    "initial_state": {
+      "cells": {
+        "mode": "fill",
+        "state": "TREE"
+      }
+    },
+    "generations": 5,
+    "storage": {
+      "mode": "all"
+    },
+    "parameters": {
+      "pp": 0.5
+    },
+    "seed": 1
+  }
+}

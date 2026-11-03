@@ -1,4 +1,4 @@
-"""Vectorized cellular automaton stepper (format 2.0, Phase 1).
+"""Vectorized cellular automaton stepper.
 
 The engine works only on the *loaded* automaton described in docs/contract.md:
 

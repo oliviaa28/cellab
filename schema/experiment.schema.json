@@ -1,0 +1,426 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cellab/experiment.schema.json",
+  "title": "CelLab experiment (format 2.0)",
+  "type": "object",
+  "required": [
+    "format_version",
+    "automaton",
+    "world",
+    "initial_state",
+    "generations",
+    "storage"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "format_version": {
+      "const": "2.0"
+    },
+    "automaton": {
+      "type": "string",
+      "minLength": 1
+    },
+    "parameters": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "number"
+      }
+    },
+    "world": {
+      "type": "object",
+      "required": [
+        "rows",
+        "cols",
+        "boundary"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "rows": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "cols": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "boundary": {
+          "enum": [
+            "fixed",
+            "toroidal"
+          ]
+        },
+        "outside": {
+          "type": "object",
+          "required": [
+            "state"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "state": {
+              "type": "string",
+              "minLength": 1
+            },
+            "values": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "number"
+              }
+            }
+          }
+        }
+      }
+    },
+    "initial_state": {
+      "type": "object",
+      "required": [
+        "cells"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "cells": {
+          "$ref": "#/$defs/initial_cells"
+        },
+        "values": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/initial_values"
+          }
+        },
+        "agents": {
+          "$comment": "Phase 3: details are finalized by Person 4.",
+          "type": "object"
+        }
+      }
+    },
+    "generations": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "storage": {
+      "type": "object",
+      "required": [
+        "mode"
+      ],
+      "properties": {
+        "mode": {
+          "enum": [
+            "all",
+            "last",
+            "every"
+          ]
+        },
+        "every": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "if": {
+        "required": [
+          "mode"
+        ],
+        "properties": {
+          "mode": {
+            "const": "every"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "every"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "mode": true,
+          "every": true
+        }
+      },
+      "else": {
+        "additionalProperties": false,
+        "properties": {
+          "mode": true
+        }
+      }
+    },
+    "seed": {
+      "type": "integer",
+      "minimum": 0
+    }
+  },
+  "$defs": {
+    "symbol_grid": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "number_grid": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "array",
+        "minItems": 1,
+        "items": {
+          "type": "number"
+        }
+      }
+    },
+    "initial_cells": {
+      "type": "object",
+      "required": [
+        "mode"
+      ],
+      "properties": {
+        "mode": {
+          "enum": [
+            "fill",
+            "random",
+            "manual",
+            "pattern"
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "mode"
+            ],
+            "properties": {
+              "mode": {
+                "const": "fill"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "state"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "mode": true,
+              "state": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "mode"
+            ],
+            "properties": {
+              "mode": {
+                "const": "random"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "proportions"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "mode": true,
+              "proportions": {
+                "type": "object",
+                "minProperties": 1,
+                "additionalProperties": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "mode"
+            ],
+            "properties": {
+              "mode": {
+                "const": "manual"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "grid"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "mode": true,
+              "grid": {
+                "$ref": "#/$defs/symbol_grid"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "mode"
+            ],
+            "properties": {
+              "mode": {
+                "const": "pattern"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "background",
+              "pattern",
+              "position"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "mode": true,
+              "background": {
+                "type": "string",
+                "minLength": 1
+              },
+              "pattern": {
+                "$ref": "#/$defs/symbol_grid"
+              },
+              "position": {
+                "$ref": "#/$defs/position"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "initial_values": {
+      "type": "object",
+      "required": [
+        "mode"
+      ],
+      "properties": {
+        "mode": {
+          "enum": [
+            "constant",
+            "random",
+            "manual"
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "mode"
+            ],
+            "properties": {
+              "mode": {
+                "const": "constant"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "value"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "mode": true,
+              "value": {
+                "type": "number"
+              },
+              "points": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "position",
+                    "value"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "position": {
+                      "$ref": "#/$defs/position"
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "mode"
+            ],
+            "properties": {
+              "mode": {
+                "const": "random"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "min",
+              "max"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "mode": true,
+              "min": {
+                "type": "number"
+              },
+              "max": {
+                "type": "number"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "mode"
+            ],
+            "properties": {
+              "mode": {
+                "const": "manual"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "grid"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "mode": true,
+              "grid": {
+                "$ref": "#/$defs/number_grid"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "position": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "integer"
+        }
+      ],
+      "minItems": 2,
+      "maxItems": 2,
+      "$comment": "[row, col]"
+    }
+  }
+}
