@@ -39,7 +39,7 @@ def _random_condition(
             return {"count": target, "min": low, "max": high}
         else:
             k = int(rng.integers(1, min(3, max_neighbors + 1)))
-            vals = sorted(list(rng.choice(max_neighbors + 1, size=k, replace=False)))
+            vals = sorted(rng.choice(max_neighbors + 1, size=k, replace=False))
             return {"count": target, "in": [int(v) for v in vals]}
 
     if cond_type == "pattern" and neighborhood_type == "1d":

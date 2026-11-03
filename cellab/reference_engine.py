@@ -34,6 +34,20 @@ def _get_neighbor_val(
     return int(outside)
 
 
+def _eval_count_condition(condition: Mapping[str, Any], neighbor_vals: list[int]) -> bool:
+    """Evaluate a count-based condition on neighbor values."""
+    target_state = condition["count"]
+    cnt = neighbor_vals.count(target_state)
+
+    if "min" in condition and cnt < condition["min"]:
+        return False
+    if "max" in condition and cnt > condition["max"]:
+        return False
+    if "in" in condition and cnt not in condition["in"]:
+        return False
+    return True
+
+
 def _eval_condition_cell(
     condition: Mapping[str, Any] | None,
     cell_val: int,
@@ -43,18 +57,9 @@ def _eval_condition_cell(
         return True
 
     if "count" in condition:
-        target_state = condition["count"]
-        cnt = sum(1 for val in neighbor_vals if val == target_state)
-        if "min" in condition and cnt < condition["min"]:
-            return False
-        if "max" in condition and cnt > condition["max"]:
-            return False
-        if "in" in condition and cnt not in condition["in"]:
-            return False
-        return True
+        return _eval_count_condition(condition, neighbor_vals)
 
     if "pattern" in condition:
-        # 1D neighbors: [W, E], center is cell_val
         left, center, right = condition["pattern"]
         return neighbor_vals[0] == left and cell_val == center and neighbor_vals[1] == right
 
@@ -71,6 +76,26 @@ def _eval_condition_cell(
         raise NotImplementedError("expr conditions belong to Phase 2")
 
     raise ValueError(f"Unknown condition: {condition!r}")
+
+
+def _apply_rule_to_cell(
+    rule: Mapping[str, Any],
+    cell_val: int,
+    neighbor_vals: list[int],
+    prob_val: float | None,
+) -> tuple[bool, int | None]:
+    """Check rule match. Returns (matches, to_code)."""
+    if cell_val not in set(rule["from_codes"]):
+        return False, None
+
+    if not _eval_condition_cell(rule.get("when"), cell_val, neighbor_vals):
+        return False, None
+
+    prob = rule.get("probability", 1.0)
+    if prob < 1.0 and prob_val is not None and prob_val >= prob:
+        return False, None
+
+    return True, rule.get("to_code")
 
 
 def step_cells_reference(
@@ -94,15 +119,9 @@ def step_cells_reference(
     result_cells = cells.copy()
     unresolved = np.ones((rows, cols), dtype=bool)
 
-    # Process rules in order
     for rule in automaton["compiled_rules"]:
-        # Exact contract: draw a full random matrix if probability < 1
         prob = rule.get("probability", 1.0)
         rand_matrix = rng.random((rows, cols)) if prob < 1.0 else None
-
-        from_codes = set(rule["from_codes"])
-        condition = rule.get("when")
-        to_code = rule.get("to_code")
 
         for r in range(rows):
             for c in range(cols):
@@ -110,23 +129,17 @@ def step_cells_reference(
                     continue
 
                 cell_val = int(cells[r, c])
-                if cell_val not in from_codes:
-                    continue
-
                 neighbor_vals = [
                     _get_neighbor_val(cells, r, c, dr, dc, boundary, outside)
                     for dr, dc in offsets
                 ]
+                prob_val = rand_matrix[r, c] if rand_matrix is not None else None
 
-                if not _eval_condition_cell(condition, cell_val, neighbor_vals):
-                    continue
-
-                if prob < 1.0 and rand_matrix[r, c] >= prob:
-                    continue
-
-                if to_code is not None:
-                    result_cells[r, c] = to_code
-                unresolved[r, c] = False
+                matched, to_code = _apply_rule_to_cell(rule, cell_val, neighbor_vals, prob_val)
+                if matched:
+                    if to_code is not None:
+                        result_cells[r, c] = to_code
+                    unresolved[r, c] = False
 
     new_state = dict(state)
     new_state["cells"] = result_cells
