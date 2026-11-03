@@ -41,7 +41,7 @@ def _project_root() -> Path:
 
 
 def _sanitize_name(name: str) -> str:
-    """Sanitize name to prevent path traversal issues (SonarCloud S2083)."""
+    """Sanitize name to keep run directory names clean and safe."""
     clean = re.sub(r"[^a-zA-Z0-9_\-]", "_", name.strip())
     return clean or "run"
 
@@ -85,7 +85,7 @@ def _serialize_rng_state(rng: np.random.Generator) -> dict[str, Any]:
 
 def _restore_rng_state(state_dict: dict[str, Any]) -> np.random.Generator:
     """Reconstruct a Generator from a saved state dict."""
-    rng = np.random.default_rng()
+    rng = np.random.default_rng(seed=0)
     bg_state: dict[str, Any] = {
         "bit_generator": state_dict["bit_generator"],
     }

@@ -45,6 +45,9 @@ def step(
         raise ValueError(f"Unknown automaton kind: {kind!r}")
 
 
+MAX_GENERATIONS = 1_000_000
+
+
 # ---------------------------------------------------------------------------
 # Run (multiple generations)
 # ---------------------------------------------------------------------------
@@ -75,11 +78,14 @@ def run(
         ``rng`` – the generator after the run (for saving / resuming)
         ``last_state`` – the final state
     """
+    if not isinstance(generations, int) or not 0 <= generations <= MAX_GENERATIONS:
+        raise ValueError(
+            f"generations must be an integer between 0 and {MAX_GENERATIONS}, got {generations!r}"
+        )
+
     if rng is None:
-        if seed is not None:
-            rng = np.random.default_rng(seed)
-        else:
-            rng = np.random.default_rng()
+        effective_seed = 0 if seed is None else seed
+        rng = np.random.default_rng(effective_seed)
 
     mode = storage["mode"]
     every = storage.get("every", 1)

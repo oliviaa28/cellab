@@ -9,6 +9,7 @@ Covers:
 
 import shutil
 import numpy as np
+import pytest
 
 from cellab.initial_state import create_initial_state
 from cellab.simulation import step, run
@@ -170,6 +171,9 @@ def test_simulation_step_and_run_storage_modes():
     res_every = run(aut, st0, 4, {"mode": "every", "every": 2}, rng=np.random.default_rng(0))
     gens = [s["generation"] for s in res_every["states"]]
     assert gens == [0, 2, 4]
+
+    with pytest.raises(ValueError):
+        run(aut, st0, -1, {"mode": "all"}, rng=np.random.default_rng(0))
 
 
 # ---------------------------------------------------------------------------

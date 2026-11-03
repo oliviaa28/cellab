@@ -310,13 +310,18 @@ def main() -> None:
     automaton, experiment = _load_config(aut_path, exp_path, project_root)
 
     # Step 3: Build initial state
-    seed = raw_exp.get("seed")
-    rng = np.random.default_rng(seed)
+    raw_seed = raw_exp.get("seed")
+    effective_seed = 0 if raw_seed is None else int(raw_seed)
+    rng = np.random.default_rng(effective_seed)
     state0 = create_initial_state(automaton, experiment, rng)
     print(f"\n✓ Initial state created (Generation 0, shape {state0['cells'].shape}).")
 
     # Step 4: Run full simulation
-    generations = experiment["generations"]
+    max_generations = 100_000
+    generations = int(experiment["generations"])
+    if not 0 <= generations <= max_generations:
+        raise ValueError(f"generations out of bounds [0, {max_generations}]: {generations}")
+
     storage = experiment.get("storage", {"mode": "all"})
     result = run(automaton, state0, generations, storage, rng=rng)
 
@@ -346,8 +351,9 @@ def main() -> None:
 
         if is_small_grid:
             code_to_sym = automaton["code_to_symbol"]
-            for r in range(rows):
-                line = "".join(code_to_sym.get(int(cells[r, c]), "?") for c in range(cols))
+            cell_rows, cell_cols = cells.shape
+            for r in range(cell_rows):
+                line = "".join(code_to_sym.get(int(cells[r, c]), "?") for c in range(cell_cols))
                 print(f"   {line}")
 
     # -----------------------------------------------------------------------
@@ -360,7 +366,7 @@ def main() -> None:
     rest = min(generations - half, 10)
 
     # Run first half with dedicated RNG
-    rng_split = np.random.default_rng(seed)
+    rng_split = np.random.default_rng(effective_seed)
     s0_split = create_initial_state(automaton, experiment, rng_split)
     res_half = run(automaton, s0_split, half, storage, rng=rng_split)
 
@@ -383,7 +389,7 @@ def main() -> None:
     print(f"• Simulated {rest} more steps from reloaded state (total: gen {res_continued['last_state']['generation']}).")
 
     # Compare with uninterrupted run
-    rng_cont = np.random.default_rng(seed)
+    rng_cont = np.random.default_rng(effective_seed)
     s0_cont = create_initial_state(automaton, experiment, rng_cont)
     res_direct = run(automaton, s0_cont, half + rest, storage, rng=rng_cont)
 
