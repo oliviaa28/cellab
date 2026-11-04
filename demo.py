@@ -59,8 +59,8 @@ def _load_config(exp_path: str) -> tuple[dict, dict, dict, dict]:
     print("✓ Schema and rule validation: OK (0 errors)")
 
     # load_files already checked both files; read them again, raw, for printing and saving
-    raw_exp, _ = read_json(safe_path(exp_path, PROJECT_ROOT), exp_path)
-    raw_aut, _ = read_json(safe_path(raw_exp["automaton"], PROJECT_ROOT), raw_exp["automaton"])
+    raw_exp, _ = read_json(exp_path, PROJECT_ROOT)
+    raw_aut, _ = read_json(raw_exp["automaton"], PROJECT_ROOT)
     return res["automaton"], res["experiment"], raw_aut, raw_exp
 
 

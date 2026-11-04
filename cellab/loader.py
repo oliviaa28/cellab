@@ -37,13 +37,8 @@ def load_files(experiment_path, project_root=PROJECT_ROOT) -> dict:
     """
     result = {"automaton": None, "experiment": None, "automaton_issues": [], "experiment_issues": []}
 
-    # 1. read the experiment; its path can come from the command line, so it is checked too
-    experiment_file = safe_path(experiment_path, project_root)
-    if experiment_file is None:
-        message = f"The experiment path '{experiment_path}' must stay inside the project folder."
-        result["experiment_issues"].append(make_issue("SCHEMA", [], message))
-        return result
-    raw_exp, problem = read_json(experiment_file, experiment_path)
+    # 1. read the experiment (read_json checks that the path stays inside the project)
+    raw_exp, problem = read_json(experiment_path, project_root)
     if problem is not None:
         result["experiment_issues"].append(problem)
         return result
@@ -52,14 +47,8 @@ def load_files(experiment_path, project_root=PROJECT_ROOT) -> dict:
         result["experiment_issues"].append(make_issue("SCHEMA", [], message))
         return result
 
-    # 2. read the automaton it points to; that path comes from the file, so it is checked first
-    automaton_file = safe_path(raw_exp["automaton"], project_root)
-    if automaton_file is None:
-        message = f"The automaton path '{raw_exp['automaton']}' must stay inside the project folder."
-        result["experiment_issues"].append(make_issue("SCHEMA", ["automaton"], message))
-        return result
-
-    raw_aut, problem = read_json(automaton_file, raw_exp["automaton"])
+    # 2. read the automaton it points to (same check: that path comes from the file)
+    raw_aut, problem = read_json(raw_exp["automaton"], project_root)
     if problem is not None:
         problem["message"] = "Cannot use the automaton file: " + problem["message"]
         problem["where"] = "/automaton"
@@ -84,23 +73,28 @@ def load_files(experiment_path, project_root=PROJECT_ROOT) -> dict:
 def safe_path(path: str, project_root) -> Path | None:
     """The full path, or None if it leaves the project folder.
 
-    A path written inside a file is never trusted: "../../secret.json" or
-    "C:/Windows/..." could make us read any file on the computer.
+    A path from the command line or written inside a file is never trusted:
+    "../../secret.json" or "C:/Windows/..." could make us read any file on the computer.
     """
     root = os.path.realpath(project_root)
     full_path = os.path.realpath(os.path.join(root, path))
-    try:
-        if os.path.commonpath([root, full_path]) != root:
-            return None
-    except ValueError:
-        # on Windows: the two paths are on different drives
+    if not full_path.startswith(root + os.sep):
         return None
     return Path(full_path)
 
 
-def read_json(full_path: Path, shown_name):
+def read_json(path, project_root=PROJECT_ROOT):
     """Return (data, None) if the file can be read, or (None, issue) if not.
-    shown_name is the path as the user wrote it, used in messages."""
+
+    path is relative to project_root (as the user wrote it, used in messages)
+    and must stay inside project_root.
+    """
+    root = os.path.realpath(project_root)
+    full_path = os.path.realpath(os.path.join(root, path))
+    if not full_path.startswith(root + os.sep):
+        return None, make_issue("SCHEMA", [], f"The path '{path}' must stay inside the project folder.")
+
+    shown_name = path
     try:
         with open(full_path, encoding="utf-8") as file:
             return json.load(file), None
