@@ -56,9 +56,14 @@ def _shift(cells: np.ndarray, offset: tuple[int, int], boundary: str, outside: i
 
 
 def _count_mask(condition: Mapping[str, Any], cells: np.ndarray, neighbors: list[np.ndarray]) -> np.ndarray:
+    # "count" is one state code or a list of codes (neighbors in any of them are counted)
+    targets = condition["count"]
+    if not isinstance(targets, list):
+        targets = [targets]
+
     count = np.zeros(cells.shape, dtype=np.int64)
     for neighbor in neighbors:
-        count += neighbor == condition["count"]
+        count += np.isin(neighbor, targets)
 
     mask = np.ones(cells.shape, dtype=bool)
     if "min" in condition:
@@ -125,6 +130,9 @@ def step_cells(
     unresolved = np.ones(cells.shape, dtype=bool)  # cells not yet changed by an earlier rule
 
     for rule in automaton["compiled_rules"]:
+        if rule.get("set"):
+            raise NotImplementedError("set formulas are part of Phase 2")
+
         matches = unresolved & np.isin(cells, rule["from_codes"])
         matches &= _condition_mask(rule["when"], cells, neighbors)
 

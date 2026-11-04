@@ -283,28 +283,42 @@ def _check_rule_parts(rule: dict, path: list, names: dict) -> list:
 
 def _check_condition_names(condition: dict, path: list, names: dict) -> list:
     """One simple condition: the states and parameters it uses must exist."""
-    issues = []
-
     if "count" in condition:
-        issues += _unknown_state(condition["count"], path + ["count"], names["states"])
-        for key in ["min", "max"]:
-            if key in condition:
-                issues += _unknown_parameter(condition[key], path + [key], names["parameters"])
-        for position, value in enumerate(condition.get("in", [])):
-            issues += _unknown_parameter(value, path + ["in", position], names["parameters"])
-
-    elif "pattern" in condition:
-        pattern = condition["pattern"]
-        if not names["is_1d"]:
-            message = "'pattern' can only be used with a 1d neighborhood."
-            issues.append(make_issue("PATTERN_NOT_1D", path + ["pattern"], message))
-        elif len(pattern) != 3:
-            message = f"'pattern' must have exactly 3 elements [left, center, right], not {len(pattern)}."
-            issues.append(make_issue("PATTERN_NOT_1D", path + ["pattern"], message))
-        for position, name in enumerate(pattern):
-            issues += _unknown_state(name, path + ["pattern", position], names["states"])
-
+        return _check_count_names(condition, path, names)
+    if "pattern" in condition:
+        return _check_pattern_names(condition["pattern"], path + ["pattern"], names)
     # "expr": formulas are checked in Phase 2 (BAD_EXPRESSION, EXPRESSION_TYPE)
+    return []
+
+
+def _check_count_names(condition: dict, path: list, names: dict) -> list:
+    """A count condition: the counted states and the parameters in min/max/in must exist."""
+    issues = []
+    if isinstance(condition["count"], list):
+        for position, name in enumerate(condition["count"]):
+            issues += _unknown_state(name, path + ["count", position], names["states"])
+    else:
+        issues += _unknown_state(condition["count"], path + ["count"], names["states"])
+
+    for key in ["min", "max"]:
+        if key in condition:
+            issues += _unknown_parameter(condition[key], path + [key], names["parameters"])
+    for position, value in enumerate(condition.get("in", [])):
+        issues += _unknown_parameter(value, path + ["in", position], names["parameters"])
+    return issues
+
+
+def _check_pattern_names(pattern: list, path: list, names: dict) -> list:
+    """A pattern condition: only for 1d, exactly 3 elements, known states."""
+    issues = []
+    if not names["is_1d"]:
+        message = "'pattern' can only be used with a 1d neighborhood."
+        issues.append(make_issue("PATTERN_NOT_1D", path, message))
+    elif len(pattern) != 3:
+        message = f"'pattern' must have exactly 3 elements [left, center, right], not {len(pattern)}."
+        issues.append(make_issue("PATTERN_NOT_1D", path, message))
+    for position, name in enumerate(pattern):
+        issues += _unknown_state(name, path + [position], names["states"])
     return issues
 
 
@@ -455,7 +469,10 @@ def _collect_used_names(raw_aut: dict) -> dict:
 
         for condition, _path in _rule_conditions(rule, ["rules", index]):
             if "count" in condition:
-                used["states"].append(condition["count"])
+                if isinstance(condition["count"], list):
+                    used["states"].extend(condition["count"])
+                else:
+                    used["states"].append(condition["count"])
                 used["parameters"].extend(_parameter_names([condition.get("min"), condition.get("max")]))
                 used["parameters"].extend(_parameter_names(condition.get("in", [])))
             elif "pattern" in condition:

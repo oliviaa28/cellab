@@ -1,0 +1,11 @@
+{
+  "format_version": "2.0",
+  "automaton": "automata/crystal_growth.json",
+  "parameters": {"min_neighbors": 1, "max_neighbors": 8},
+  "world": {"rows": 41, "cols": 41, "boundary": "fixed", "outside": {"state": "EMPTY"}},
+  "initial_state": {
+    "cells": {"mode": "pattern", "background": "EMPTY", "pattern": ["#"], "position": [20, 20]}
+  },
+  "generations": 20,
+  "storage": {"mode": "all"}
+}

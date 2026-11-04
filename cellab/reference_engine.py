@@ -45,8 +45,14 @@ def _neighbor_values(grid: Mapping[str, Any], r: int, c: int) -> list[int]:
 
 def _eval_count_condition(condition: Mapping[str, Any], neighbor_vals: list[int]) -> bool:
     """Evaluate a count-based condition on neighbor values."""
-    target_state = condition["count"]
-    cnt = neighbor_vals.count(target_state)
+    targets = condition["count"]
+    if not isinstance(targets, list):
+        targets = [targets]
+
+    cnt = 0
+    for value in neighbor_vals:
+        if value in targets:
+            cnt += 1
 
     if "min" in condition and cnt < condition["min"]:
         return False
