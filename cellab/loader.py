@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import copy
 import json
+import os
 from pathlib import Path
 
 from cellab.conventions import NEIGHBOR_OFFSETS, PROJECT_ROOT, merge_parameters
@@ -36,8 +37,12 @@ def load_files(experiment_path, project_root=PROJECT_ROOT) -> dict:
     """
     result = {"automaton": None, "experiment": None, "automaton_issues": [], "experiment_issues": []}
 
-    # 1. read the experiment (its path comes from the caller, not from a file)
-    experiment_file = Path(project_root) / experiment_path
+    # 1. read the experiment; its path can come from the command line, so it is checked too
+    experiment_file = safe_path(experiment_path, project_root)
+    if experiment_file is None:
+        message = f"The experiment path '{experiment_path}' must stay inside the project folder."
+        result["experiment_issues"].append(make_issue("SCHEMA", [], message))
+        return result
     raw_exp, problem = read_json(experiment_file, experiment_path)
     if problem is not None:
         result["experiment_issues"].append(problem)
@@ -82,11 +87,15 @@ def safe_path(path: str, project_root) -> Path | None:
     A path written inside a file is never trusted: "../../secret.json" or
     "C:/Windows/..." could make us read any file on the computer.
     """
-    root = Path(project_root).resolve()
-    full_path = (root / path).resolve()
-    if not full_path.is_relative_to(root):
+    root = os.path.realpath(project_root)
+    full_path = os.path.realpath(os.path.join(root, path))
+    try:
+        if os.path.commonpath([root, full_path]) != root:
+            return None
+    except ValueError:
+        # on Windows: the two paths are on different drives
         return None
-    return full_path
+    return Path(full_path)
 
 
 def read_json(full_path: Path, shown_name):

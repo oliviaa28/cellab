@@ -140,7 +140,7 @@ def test_missing_file_is_reported_not_raised():
 def test_broken_json_is_reported_not_raised(tmp_path):
     path = tmp_path / "broken.json"
     path.write_text('{"format_version": "2.0",', encoding="utf-8")
-    result = load_files(path)
+    result = load_files("broken.json", project_root=tmp_path)
     assert result["automaton"] is None
     assert "not valid JSON" in result["experiment_issues"][0]["message"]
 
@@ -170,6 +170,13 @@ def test_automaton_path_cannot_leave_the_project(tmp_path):
     result = load_files("experiment.json", project_root=tmp_path)
     assert result["automaton"] is None
     assert result["experiment_issues"][0]["where"] == "/automaton"
+    assert "inside the project folder" in result["experiment_issues"][0]["message"]
+
+
+def test_experiment_path_cannot_leave_the_project(tmp_path):
+    # The experiment path can come from the command line, so it is checked too.
+    result = load_files("../outside.json", project_root=tmp_path)
+    assert result["automaton"] is None
     assert "inside the project folder" in result["experiment_issues"][0]["message"]
 
 

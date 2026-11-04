@@ -15,7 +15,6 @@ Usage:
 
 from __future__ import annotations
 
-import json
 import shutil
 import sys
 from pathlib import Path
@@ -26,7 +25,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from cellab.initial_state import create_initial_state
-from cellab.loader import load_automaton, load_experiment, load_files
+from cellab.loader import load_automaton, load_experiment, load_files, read_json, safe_path
 from cellab.simulation import run
 from cellab.storage import load_run, save_run
 from cellab.validator import has_errors, validate_automaton, validate_experiment
@@ -59,11 +58,9 @@ def _load_config(exp_path: str) -> tuple[dict, dict, dict, dict]:
         raise ValueError("Validation failed")
     print("✓ Schema and rule validation: OK (0 errors)")
 
-    # load_files already checked that both paths are valid and inside the project
-    with open(PROJECT_ROOT / exp_path, encoding="utf-8") as f:
-        raw_exp = json.load(f)
-    with open(PROJECT_ROOT / raw_exp["automaton"], encoding="utf-8") as f:
-        raw_aut = json.load(f)
+    # load_files already checked both files; read them again, raw, for printing and saving
+    raw_exp, _ = read_json(safe_path(exp_path, PROJECT_ROOT), exp_path)
+    raw_aut, _ = read_json(safe_path(raw_exp["automaton"], PROJECT_ROOT), raw_exp["automaton"])
     return res["automaton"], res["experiment"], raw_aut, raw_exp
 
 
@@ -287,7 +284,10 @@ def run_experiment(exp_path: str) -> None:
 
 def resume_experiment(run_dir: str, extra_generations: int) -> None:
     """Reload a saved run and simulate more generations from its last state."""
-    loaded = load_run(PROJECT_ROOT / run_dir)
+    run_path = safe_path(run_dir, PROJECT_ROOT)
+    if run_path is None:
+        raise ValueError(f"The run folder '{run_dir}' must be inside the project folder")
+    loaded = load_run(run_path)
     automaton, experiment = _load_saved_files(loaded["automaton_raw"], loaded["experiment_raw"])
     _print_details(loaded["automaton_raw"], loaded["experiment_raw"])
 
