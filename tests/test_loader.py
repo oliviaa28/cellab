@@ -99,6 +99,38 @@ def test_loaded_rule_30_runs_on_the_engine():
         np.testing.assert_array_equal(state["cells"], grid_to_cells(automaton, [row]))
 
 
+def test_count_over_a_list_of_states():
+    # S is infected when at least 2 neighbors are infected, in any of I1, I2, I3
+    result = load_files("experiments/epidemic_center.json")
+    automaton = result["automaton"]
+    assert automaton["compiled_rules"][3]["when"] == {"count": [1, 2, 3], "min": 2}
+
+    state = make_state(grid_to_cells(automaton, ["SSS", "S12", "SSS"]))
+    state = step_cells(automaton, state, np.random.default_rng(0))
+    # every S touching both the 1 and the 2 has 2 infected neighbors
+    np.testing.assert_array_equal(state["cells"], grid_to_cells(automaton, ["S11", "S23", "S11"]))
+
+
+def test_loaded_traffic_184_moves_cars():
+    automaton = load_files("experiments/traffic_184_road.json")["automaton"]
+    rows = ["..C.CC..C.", "...CC.C..C", "C..C.C.C.."]
+    state = make_state(grid_to_cells(automaton, [rows[0]]))
+    rng = np.random.default_rng(0)
+    for row in rows[1:]:
+        state = step_cells(automaton, state, rng)
+        np.testing.assert_array_equal(state["cells"], grid_to_cells(automaton, [row]))
+
+
+def test_loaded_forest_fire_statement_example():
+    # The initial state given in the project statement
+    result = load_files("experiments/forest_fire_statement.json")
+    automaton = result["automaton"]
+    state = make_state(grid_to_cells(automaton, result["experiment"]["initial_state"]["cells"]["grid"]))
+    state = step_cells(automaton, state, np.random.default_rng(0))
+    expected = grid_to_cells(automaton, ["TTTT.", "TF.FT", ".F.FT", "TFFFT"])
+    np.testing.assert_array_equal(state["cells"], expected)
+
+
 def test_missing_file_is_reported_not_raised():
     result = load_files("experiments/does_not_exist.json")
     assert result["automaton"] is None

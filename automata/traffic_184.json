@@ -1,0 +1,21 @@
+{
+  "format_version": "2.0",
+  "kind": "cells",
+  "name": "Traffic (Rule 184)",
+  "description": "Drum circular 1D; o masina inainteaza o pozitie daca celula din fata (E) e libera.",
+  "states": [
+    {"name": "EMPTY", "symbol": ".", "color": "#F5F3EE"},
+    {"name": "CAR",   "symbol": "C", "color": "#D1495B"}
+  ],
+  "neighborhood": {"type": "1d", "radius": 1},
+  "rules": [
+    {"from": "CAR", "to": "EMPTY", "when": {"any": [
+      {"pattern": ["EMPTY", "CAR", "EMPTY"]},
+      {"pattern": ["CAR",   "CAR", "EMPTY"]}
+    ]}},
+    {"from": "EMPTY", "to": "CAR", "when": {"any": [
+      {"pattern": ["CAR", "EMPTY", "EMPTY"]},
+      {"pattern": ["CAR", "EMPTY", "CAR"]}
+    ]}}
+  ]
+}

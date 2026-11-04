@@ -239,8 +239,16 @@ def _compile_condition(condition: dict, codes: dict, parameters: dict) -> dict:
 
 
 def _compile_count(condition: dict, codes: dict, parameters: dict) -> dict:
-    """{"count": "FIRE", "min": "k"} becomes {"count": 2, "min": 3}."""
-    compiled = {"count": codes[condition["count"]]}
+    """{"count": "FIRE", "min": "k"} becomes {"count": 2, "min": 3}.
+
+    A list of states stays a list: {"count": ["I1", "I2"]} becomes {"count": [1, 2]}.
+    """
+    if isinstance(condition["count"], list):
+        compiled = {"count": []}
+        for name in condition["count"]:
+            compiled["count"].append(codes[name])
+    else:
+        compiled = {"count": codes[condition["count"]]}
     if "min" in condition:
         compiled["min"] = int(_number(condition["min"], parameters))
     if "max" in condition:

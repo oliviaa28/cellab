@@ -286,7 +286,11 @@ def _check_condition_names(condition: dict, path: list, names: dict) -> list:
     issues = []
 
     if "count" in condition:
-        issues += _unknown_state(condition["count"], path + ["count"], names["states"])
+        if isinstance(condition["count"], list):
+            for position, name in enumerate(condition["count"]):
+                issues += _unknown_state(name, path + ["count", position], names["states"])
+        else:
+            issues += _unknown_state(condition["count"], path + ["count"], names["states"])
         for key in ["min", "max"]:
             if key in condition:
                 issues += _unknown_parameter(condition[key], path + [key], names["parameters"])
@@ -455,7 +459,10 @@ def _collect_used_names(raw_aut: dict) -> dict:
 
         for condition, _path in _rule_conditions(rule, ["rules", index]):
             if "count" in condition:
-                used["states"].append(condition["count"])
+                if isinstance(condition["count"], list):
+                    used["states"].extend(condition["count"])
+                else:
+                    used["states"].append(condition["count"])
                 used["parameters"].extend(_parameter_names([condition.get("min"), condition.get("max")]))
                 used["parameters"].extend(_parameter_names(condition.get("in", [])))
             elif "pattern" in condition:

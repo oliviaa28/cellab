@@ -1,0 +1,25 @@
+{
+  "description": "A count list names the same state twice.",
+  "expect": {
+    "file": "automaton",
+    "code": "SCHEMA",
+    "where": "/rules/1/when/count"
+  },
+  "automaton": {
+    "format_version": "2.0",
+    "kind": "cells",
+    "name": "Epidemic",
+    "states": [
+      {"name": "S",  "symbol": "S"},
+      {"name": "I1", "symbol": "1"},
+      {"name": "I2", "symbol": "2"},
+      {"name": "R",  "symbol": "R"}
+    ],
+    "neighborhood": {"type": "moore", "radius": 1},
+    "rules": [
+      {"from": "I1", "to": "I2"},
+      {"from": "S",  "to": "I1", "when": {"count": ["I1", "I1"], "min": 2}},
+      {"from": "I2", "to": "R"}
+    ]
+  }
+}

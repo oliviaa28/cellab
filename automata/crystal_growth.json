@@ -1,0 +1,15 @@
+{
+  "format_version": "2.0",
+  "kind": "cells",
+  "name": "Crystal Growth",
+  "description": "O celula goala devine cristal daca numarul de vecini cristal e intre 'min_neighbors' si 'max_neighbors'.",
+  "states": [
+    {"name": "EMPTY",   "symbol": ".", "color": "#1E1E1E"},
+    {"name": "CRYSTAL", "symbol": "#", "color": "#8ECAE6"}
+  ],
+  "neighborhood": {"type": "moore", "radius": 1},
+  "parameters": {"min_neighbors": 1, "max_neighbors": 1},
+  "rules": [
+    {"from": "EMPTY", "to": "CRYSTAL", "when": {"count": "CRYSTAL", "min": "min_neighbors", "max": "max_neighbors"}}
+  ]
+}

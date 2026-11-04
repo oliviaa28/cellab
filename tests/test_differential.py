@@ -75,6 +75,10 @@ def test_differential_random_automata(seed: int):
     "experiments/brians_brain_random.json",
     "experiments/rule_30_center.json",
     "experiments/cyclic_random.json",
+    "experiments/traffic_184_road.json",
+    "experiments/epidemic_center.json",
+    "experiments/crystal_growth_center.json",
+    "experiments/crystal_growth_at_least_one.json",
 ])
 def test_differential_real_automata(experiment_path: str):
     """The two engines agree on the real automata files for 30 generations."""

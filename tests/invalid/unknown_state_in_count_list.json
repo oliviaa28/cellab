@@ -1,0 +1,25 @@
+{
+  "description": "Counting a list of states where one state was never declared.",
+  "expect": {
+    "file": "automaton",
+    "code": "UNKNOWN_STATE",
+    "where": "/rules/1/when/count/1"
+  },
+  "automaton": {
+    "format_version": "2.0",
+    "kind": "cells",
+    "name": "Epidemic",
+    "states": [
+      {"name": "S",  "symbol": "S"},
+      {"name": "I1", "symbol": "1"},
+      {"name": "I2", "symbol": "2"},
+      {"name": "R",  "symbol": "R"}
+    ],
+    "neighborhood": {"type": "moore", "radius": 1},
+    "rules": [
+      {"from": "I1", "to": "I2"},
+      {"from": "S",  "to": "I1", "when": {"count": ["I1", "I3"], "min": 2}},
+      {"from": "I2", "to": "R"}
+    ]
+  }
+}
