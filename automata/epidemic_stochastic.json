@@ -1,0 +1,17 @@
+{
+  "format_version": "2.0",
+  "kind": "cells",
+  "name": "Epidemic (probabilistic)",
+  "description": "Model SIR: S se infecteaza cu sansa beta pentru fiecare vecin infectat; I se vindeca cu probabilitatea gamma.",
+  "states": [
+    {"name": "S", "symbol": "S", "color": "#A8DADC"},
+    {"name": "I", "symbol": "I", "color": "#E63946"},
+    {"name": "R", "symbol": "R", "color": "#6A994E"}
+  ],
+  "neighborhood": {"type": "moore", "radius": 1},
+  "parameters": {"beta": 0.125, "gamma": 0.1},
+  "rules": [
+    {"from": "I", "to": "R", "probability": "gamma"},
+    {"from": "S", "to": "I", "when": {"expr": "random() < beta * count(I)"}}
+  ]
+}

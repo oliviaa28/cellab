@@ -1,0 +1,28 @@
+{
+  "description": "random() in a formula needs a seed, even when the initial state is not random.",
+  "expect": {
+    "file": "experiment",
+    "code": "MISSING_SEED",
+    "where": ""
+  },
+  "automaton": "automata/epidemic_stochastic.json",
+  "experiment": {
+    "format_version": "2.0",
+    "automaton": "automata/epidemic_stochastic.json",
+    "world": {
+      "rows": 10,
+      "cols": 10,
+      "boundary": "toroidal"
+    },
+    "initial_state": {
+      "cells": {
+        "mode": "fill",
+        "state": "S"
+      }
+    },
+    "generations": 5,
+    "storage": {
+      "mode": "last"
+    }
+  }
+}
