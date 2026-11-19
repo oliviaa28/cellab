@@ -1,0 +1,40 @@
+{
+  "description": "A formula that uses a name that is neither a variable nor a parameter.",
+  "expect": {
+    "file": "automaton",
+    "code": "UNKNOWN_VARIABLE",
+    "where": "/rules/0/set/heat"
+  },
+  "automaton": {
+    "format_version": "2.0",
+    "kind": "cells",
+    "name": "Diffusion",
+    "description": "Fiecare celula ia media dintre valoarea ei si a celor 4 vecini.",
+    "states": [
+      {
+        "name": "CELL",
+        "symbol": "c",
+        "color": "#FFFFFF"
+      }
+    ],
+    "variables": [
+      {
+        "name": "heat",
+        "type": "float",
+        "default": 0.0
+      }
+    ],
+    "neighborhood": {
+      "type": "von_neumann",
+      "radius": 1
+    },
+    "rules": [
+      {
+        "from": "*",
+        "set": {
+          "heat": "(heat + sum(temperature)) / 5"
+        }
+      }
+    ]
+  }
+}

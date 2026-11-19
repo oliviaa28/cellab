@@ -18,11 +18,11 @@ Every sense check below has the same shape:
 from __future__ import annotations
 
 import json
-import re
 
 from jsonschema import Draft202012Validator
 
 from cellab.conventions import NEIGHBOR_OFFSETS, PROJECT_ROOT, json_pointer, merge_parameters
+from cellab.expressions import ExpressionError, parse_expression, rule_formulas, uses_random
 
 SCHEMA_DIR = PROJECT_ROOT / "schema"
 
@@ -270,8 +270,9 @@ def _check_rule_parts(rule: dict, path: list, names: dict) -> list:
     if "to" in rule:
         issues += _unknown_state(rule["to"], path + ["to"], names["states"])
 
-    for variable in rule.get("set", {}):
+    for variable, formula in rule.get("set", {}).items():
         issues += _unknown_variable(variable, path + ["set", variable], names["variables"])
+        issues += _check_formula(formula, "number", path + ["set", variable], names)
 
     if "to" not in rule and len(rule.get("set", {})) == 0:
         message = "Rule has neither 'to' nor 'set', so it changes nothing."
@@ -287,7 +288,18 @@ def _check_condition_names(condition: dict, path: list, names: dict) -> list:
         return _check_count_names(condition, path, names)
     if "pattern" in condition:
         return _check_pattern_names(condition["pattern"], path + ["pattern"], names)
-    # "expr": formulas are checked in Phase 2 (BAD_EXPRESSION, EXPRESSION_TYPE)
+    if "expr" in condition:
+        return _check_formula(condition["expr"], "bool", path + ["expr"], names)
+    return []
+
+
+def _check_formula(text: str, expected: str, path: list, names: dict) -> list:
+    """A formula must use only allowed elements and known names, and give the right kind of result:
+    true/false for a condition, a number for a set formula."""
+    try:
+        parse_expression(text, names["states"], names["variables"], names["parameters"], expected)
+    except ExpressionError as error:
+        return [make_issue(error.code, path, error.message)]
     return []
 
 
@@ -449,15 +461,15 @@ def _check_unused(raw_aut: dict) -> list:
                 issues.append(make_issue("UNUSED_STATE", ["states", index], message, level="warning"))
 
     for name in raw_aut.get("parameters", {}):
-        if name not in used["parameters"] and not _appears_in_formulas(name, used["formulas"]):
+        if name not in used["parameters"]:
             message = f"Parameter '{name}' is not used by any rule."
             issues.append(make_issue("UNUSED_PARAMETER", ["parameters", name], message, level="warning"))
     return issues
 
 
 def _collect_used_names(raw_aut: dict) -> dict:
-    """Everything the rules mention: {"states": [...], "parameters": [...], "formulas": [...]}."""
-    used = {"states": [], "parameters": [], "formulas": []}
+    """Everything the rules mention: {"states": [...], "parameters": [...]}."""
+    used = {"states": [], "parameters": []}
     states = _names(raw_aut["states"])
 
     for index, rule in enumerate(raw_aut["rules"]):
@@ -465,7 +477,8 @@ def _collect_used_names(raw_aut: dict) -> dict:
         if "to" in rule:
             used["states"].append(rule["to"])
         used["parameters"].extend(_parameter_names([rule.get("probability")]))
-        used["formulas"].extend(rule.get("set", {}).values())
+        for formula in rule.get("set", {}).values():
+            _add_formula_names(used, formula, raw_aut)
 
         for condition, _path in _rule_conditions(rule, ["rules", index]):
             if "count" in condition:
@@ -478,16 +491,19 @@ def _collect_used_names(raw_aut: dict) -> dict:
             elif "pattern" in condition:
                 used["states"].extend(condition["pattern"])
             elif "expr" in condition:
-                used["formulas"].append(condition["expr"])
+                _add_formula_names(used, condition["expr"], raw_aut)
     return used
 
 
-def _appears_in_formulas(name: str, formulas: list) -> bool:
-    """Rough check for Phase 1: the name appears as a whole word in a formula."""
-    for formula in formulas:
-        if re.search(r"\b" + re.escape(name) + r"\b", formula):
-            return True
-    return False
+def _add_formula_names(used: dict, text: str, raw_aut: dict) -> None:
+    """The states and parameters a formula really uses (a broken formula is reported elsewhere)."""
+    try:
+        formula = parse_expression(text, _names(raw_aut["states"]), _names(raw_aut.get("variables", [])),
+                                   raw_aut.get("parameters", {}))
+    except ExpressionError:
+        return
+    used["states"].extend(formula["states"])
+    used["parameters"].extend(formula["parameters"])
 
 
 # =====================================================================
@@ -661,9 +677,7 @@ def _check_seed(raw_exp: dict, raw_aut: dict) -> list:
 
     parameters = merge_parameters(raw_aut, raw_exp)
     for index, rule in enumerate(raw_aut["rules"]):
-        probability = _resolve(rule.get("probability", 1), parameters)
-        if probability is not None and probability < 1:
-            reasons.append(f"rule {index} has probability {probability}")
+        reasons += _random_parts_of_rule(index, rule, parameters)
 
     if raw_aut.get("agent_order") == "random":
         reasons.append("agents act in random order")
@@ -672,3 +686,15 @@ def _check_seed(raw_exp: dict, raw_aut: dict) -> list:
         return []
     message = "The experiment needs a 'seed' because " + "; ".join(reasons) + "."
     return [make_issue("MISSING_SEED", [], message)]
+
+
+def _random_parts_of_rule(index: int, rule: dict, parameters: dict) -> list:
+    """Why a rule is random: a probability below 1, or random() in one of its formulas."""
+    reasons = []
+    probability = _resolve(rule.get("probability", 1), parameters)
+    if probability is not None and probability < 1:
+        reasons.append(f"rule {index} has probability {probability}")
+    for text in rule_formulas(rule):
+        if uses_random(text):
+            reasons.append(f"rule {index} uses random() in '{text}'")
+    return reasons
