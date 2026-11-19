@@ -280,7 +280,8 @@ def test_int_variable_is_rounded_down_and_float_is_kept():
     state["values"] = {"n": np.full((2, 2), 5, dtype=np.int64), "x": np.full((2, 2), 5.0)}
 
     result = step_cells(automaton, state, np.random.default_rng(0))
-    assert (result["values"]["n"] == 2).all() and result["values"]["n"].dtype == np.int64
+    assert (result["values"]["n"] == 2).all() 
+    assert result["values"]["n"].dtype == np.int64
     assert (result["values"]["x"] == 2.5).all()
     assert (state["values"]["n"] == 5).all()      # the input is not modified
 
@@ -309,7 +310,8 @@ def test_division_by_zero_stops_with_rule_and_generation():
 
     with pytest.raises(ExpressionRuntimeError) as error:
         step_cells(automaton, state, np.random.default_rng(0))
-    assert "rule 0" in str(error.value) and "generation 5" in str(error.value)
+    assert "rule 0" in str(error.value) 
+    assert "generation 5" in str(error.value)
     assert "10 // n" in str(error.value)
 
     # no error when the dangerous cells do not use the rule
