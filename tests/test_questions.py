@@ -97,7 +97,8 @@ def test_state_after_uses_the_cycle_and_matches_the_full_simulation():
 def test_state_after_a_random_automaton_simulates_everything():
     automaton, state = load("experiments/forest_fire_stochastic_random.json")
     answer = state_after(automaton, state, 20, np.random.default_rng(4))
-    assert not answer["shortcut"] and answer["simulated"] == 20
+    assert not answer["shortcut"]
+    assert answer["simulated"] == 20
     np.testing.assert_array_equal(answer["state"]["cells"], run_direct(automaton, state, 20, seed=4)["cells"])
 
 
@@ -126,10 +127,12 @@ def test_forest_fire_becomes_stable_at_generation_3():
 def test_traffic_on_a_ring_is_a_cycle_not_a_stable_state():
     automaton, state = load("experiments/traffic_184_road.json")
     cycle = find_cycle(automaton, state, np.random.default_rng(0))
-    assert cycle["cycle"] and cycle["certain"]
+    assert cycle["cycle"]
+    assert cycle["certain"]
     assert (cycle["start"], cycle["length"]) == (2, 10)
     stable = when_stable(automaton, state, np.random.default_rng(0))
-    assert not stable["stable"] and stable["certain"]
+    assert not stable["stable"]
+    assert stable["certain"]
 
 
 def test_cycle_found_is_a_real_cycle():
