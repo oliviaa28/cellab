@@ -2,3 +2,4 @@ numpy==2.3.5
 jsonschema
 pytest
 matplotlib
+simpleeval==1.0.8

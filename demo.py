@@ -1,15 +1,18 @@
-"""demo.py – Phase 1 demonstration script.
+"""demo.py – Demonstration script (Phases 1 and 2).
 
 Shows:
 1. All configuration details (automaton parameters, world rules, initial state).
 2. Generation-by-generation evolution (in console with counts/grid + Matplotlib plots).
+   Automata with numeric values (Sandpile, Diffusion) also show their values.
 3. Storage: the full run is saved in runs/<name>_<date>_<nr>/.
 4. The 10+10=20 state recovery test.
+5. The answers to the 5 questions (state after N, stability, a configuration, counts, cycles).
 
 Usage:
     python demo.py
     python demo.py experiments/brians_brain_random.json
     python demo.py experiments/rule_30_center.json
+    python demo.py experiments/sandpile_center.json
     python demo.py --resume runs/<run folder> 10     (continue a saved run for 10 more generations)
 """
 
@@ -24,8 +27,10 @@ import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import numpy as np
 
+from cellab.expressions import ExpressionRuntimeError
 from cellab.initial_state import create_initial_state
 from cellab.loader import load_automaton, load_experiment, load_files, read_json, safe_path
+from cellab.questions import count_all, find_configuration, find_cycle, state_after, when_stable
 from cellab.simulation import run
 from cellab.storage import load_run, save_run
 from cellab.validator import has_errors, validate_automaton, validate_experiment
@@ -33,6 +38,7 @@ from cellab.validator import has_errors, validate_automaton, validate_experiment
 PROJECT_ROOT = Path(__file__).resolve().parent
 DEFAULT_EXPERIMENT = "experiments/forest_fire_statement.json"
 MAX_GENERATIONS = 100_000
+QUESTION_LIMIT = 2_000      # how many generations the questions may look at
 LINE = "=" * 70
 
 
@@ -119,7 +125,10 @@ def _print_details(raw_aut: dict[str, Any], raw_exp: dict[str, Any]) -> None:
     for i, r in enumerate(raw_aut['rules'], 1):
         when_str = f" when {r['when']}" if "when" in r else ""
         prob_str = f" (probability {r['probability']})" if "probability" in r else ""
-        print(f"   [{i}] From '{r.get('from')}' -> '{r.get('to', '(same)')}'{when_str}{prob_str}")
+        set_str = f" set {r['set']}" if "set" in r else ""
+        print(f"   [{i}] From '{r.get('from')}' -> '{r.get('to', '(same)')}'{when_str}{prob_str}{set_str}")
+    for variable in raw_aut.get("variables", []):
+        print(f"• Variable          : {variable['name']} ({variable['type']}, default {variable['default']})")
 
     world_cfg = raw_exp["world"]
     print(f"• Grid dimensions   : {world_cfg['rows']} rows x {world_cfg['cols']} cols")
@@ -153,12 +162,24 @@ def _print_states(states: list[dict[str, Any]], automaton: dict[str, Any]) -> No
             if cnt > 0:
                 counts.append(f"{sname}={cnt}")
         print(f"\n▶ Generation {st['generation']:2d} | Cell counts: {', '.join(counts)}")
+        _print_values(st)
 
         cell_rows, cell_cols = cells.shape
+        if automaton["variable_types"]:
+            continue    # the values say more than a grid with a single state
         if (cell_rows <= 10 and cell_cols <= 30) or cell_rows == 1:
             for r in range(cell_rows):
                 line = "".join(code_to_sym.get(int(cells[r, c]), "?") for c in range(cell_cols))
                 print(f"   {line}")
+
+
+def _print_values(state: dict[str, Any]) -> None:
+    """Total, minimum and maximum of each variable; the whole grid if it is small."""
+    for name, matrix in state.get("values", {}).items():
+        print(f"   {name}: total {matrix.sum():g}, min {matrix.min():g}, max {matrix.max():g}")
+        if matrix.shape[0] <= 6 and matrix.shape[1] <= 8:
+            for row in matrix:
+                print("      " + " ".join(f"{value:7.3g}" for value in row))
 
 
 # ---------------------------------------------------------------------------
@@ -193,10 +214,18 @@ def show_evolution(
         axes = np.array([axes])
     axes = np.ravel(axes)
 
+    # With numeric values (Sandpile, Diffusion), show the first variable instead of the states.
+    variable = next(iter(automaton["variable_types"]), None)
+    if variable is not None:
+        top = max(float(np.max(st["values"][variable])) for st in selected) or 1.0
+
     for idx, st in enumerate(selected):
         ax = axes[idx]
-        cells = np.asarray(st["cells"])
-        ax.imshow(cells, cmap=cmap, vmin=0, vmax=n_states - 1, interpolation="nearest")
+        if variable is not None:
+            ax.imshow(st["values"][variable], cmap="viridis", vmin=0, vmax=top, interpolation="nearest")
+        else:
+            cells = np.asarray(st["cells"])
+            ax.imshow(cells, cmap=cmap, vmin=0, vmax=n_states - 1, interpolation="nearest")
         gen_num = st.get("generation", idx)
         ax.set_title(f"Generation {gen_num}", fontsize=11, fontweight="bold")
         ax.set_xticks([])
@@ -247,8 +276,77 @@ def _recovery_test(automaton: dict, experiment: dict, raw_aut: dict, raw_exp: di
     s0_cont = create_initial_state(automaton, experiment, rng_cont)
     res_direct = run(automaton, s0_cont, half + rest, storage, rng=rng_cont)
 
-    match = np.array_equal(res_continued["last_state"]["cells"], res_direct["last_state"]["cells"])
+    continued, direct = res_continued["last_state"], res_direct["last_state"]
+    match = np.array_equal(continued["cells"], direct["cells"])
+    for name, matrix in direct.get("values", {}).items():
+        match = match and np.array_equal(continued["values"][name], matrix)
     print(f"• Recovery test result ({half} + {rest} == {half + rest}): {'PASS ✓' if match else 'FAIL ✗'}")
+
+
+# ---------------------------------------------------------------------------
+# The 5 questions
+# ---------------------------------------------------------------------------
+
+def ask_questions(automaton: dict, experiment: dict) -> None:
+    """Answer the 5 questions for this experiment, each from a fresh start (same seed)."""
+    print("\n" + LINE)
+    print("                      THE 5 QUESTIONS")
+    print(LINE)
+
+    def fresh_start():
+        rng = np.random.default_rng(_seed_of(experiment))
+        return create_initial_state(automaton, experiment, rng), rng
+
+    generations = int(experiment["generations"])
+    far = generations * 100
+
+    state0, rng = fresh_start()
+    answer = state_after(automaton, state0, far, rng)
+    how = (f"only {answer['simulated']} computed, thanks to the cycle" if answer["shortcut"]
+           else f"all {answer['simulated']} computed")
+    print(f"1. State after {far} generations: {_counts_text(automaton, answer['state'])}  ({how})")
+
+    state0, rng = fresh_start()
+    stable = when_stable(automaton, state0, rng, QUESTION_LIMIT)
+    sure = "" if stable["certain"] else " (observed; randomness could change it)"
+    if stable["stable"]:
+        print(f"2. Stable from generation {stable['generation']}{sure}.")
+    else:
+        print(f"2. Not stable: {stable['reason']}.")
+
+    state0, rng = fresh_start()
+    first_state = automaton["state_names"][0]
+    target = np.zeros_like(state0["cells"])
+    found = find_configuration(automaton, state0, target, rng, QUESTION_LIMIT)
+    if len(automaton["state_names"]) == 1:
+        print("3. Not useful here: this automaton has a single state (only its values change).")
+    elif found["found"]:
+        print(f"3. The whole grid is '{first_state}' at generation {found['generation']}.")
+    else:
+        never = "never (every future state was checked)" if found["certain"] else f"not in {QUESTION_LIMIT} generations"
+        print(f"3. The whole grid '{first_state}': {never}.")
+
+    state0, rng = fresh_start()
+    answer = state_after(automaton, state0, generations, rng)
+    print(f"4. After {generations} generations: {_counts_text(automaton, answer['state'])}")
+
+    state0, rng = fresh_start()
+    cycle = find_cycle(automaton, state0, rng, QUESTION_LIMIT)
+    if cycle["cycle"]:
+        sure = "" if cycle["certain"] else " (a repeated grid; with randomness this is not a sure cycle)"
+        print(f"5. Cycle of length {cycle['length']} from generation {cycle['start']}{sure}.")
+    else:
+        print(f"5. No repeated state in {cycle['checked']} generations.")
+
+
+def _counts_text(automaton: dict, state: dict) -> str:
+    parts = []
+    for name, count in count_all(automaton, state).items():
+        if count > 0:
+            parts.append(f"{name}={count}")
+    for name, matrix in state.get("values", {}).items():
+        parts.append(f"{name} total {matrix.sum():g} (max {matrix.max():g})")
+    return ", ".join(parts)
 
 
 # ---------------------------------------------------------------------------
@@ -276,6 +374,7 @@ def run_experiment(exp_path: str) -> None:
     print(f"  Continue it with: python demo.py --resume {run_dir.relative_to(PROJECT_ROOT).as_posix()} 10")
 
     _recovery_test(automaton, experiment, raw_aut, raw_exp)
+    ask_questions(automaton, experiment)
 
     print("\nOpening panel displaying intermediate generations evolution...")
     show_evolution(result["states"], automaton, max_plots=12, save_path=run_dir / "evolution.png")
@@ -318,7 +417,7 @@ def main(argv: list[str]) -> int:
     except NotImplementedError as error:
         print(f"\nNot supported yet: {error}")
         return 1
-    except (ValueError, FileNotFoundError) as error:
+    except (ValueError, FileNotFoundError, ExpressionRuntimeError) as error:
         print(f"\nStopped: {error}")
         return 1
     return 0

@@ -8,15 +8,19 @@ Phase 1 storage layout (per section 6.7 of the contract):
         generations.npz    – stored generations: cells + each variable
         last_state.npz     – last state, saved ALWAYS
         meta.json          – format_version, created, last_generation,
-                             stored_generations, rng_state
+                             stored_generations, rng_state, fingerprints
 
 Agents (agents.json) are Phase 3.
-Fingerprints are Phase 2.
+
+A fingerprint is a short text computed from a state: two identical states have
+the same fingerprint, so a state seen before is recognised without comparing
+whole grids (questions.py uses this to find cycles and stable states).
 """
 
 from __future__ import annotations
 
 import datetime
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -130,6 +134,44 @@ def _load_state_npz(path: Path, generation: int) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# Fingerprints
+# ---------------------------------------------------------------------------
+
+def fingerprint(state: dict[str, Any]) -> str:
+    """A 32-character fingerprint of a state: its cells, values and agents.
+
+    The generation number is not part of it, so the same configuration at two
+    different generations has the same fingerprint. Variables are taken in name
+    order and agents in id order, so the order in the dicts does not matter.
+    """
+    digest = hashlib.blake2b(digest_size=16)
+
+    cells = np.ascontiguousarray(state["cells"], dtype=np.int64)
+    digest.update(repr(cells.shape).encode())
+    digest.update(cells.tobytes())
+
+    for name in sorted(state.get("values", {})):
+        matrix = np.asarray(state["values"][name])
+        if np.issubdtype(matrix.dtype, np.integer):
+            matrix = np.ascontiguousarray(matrix, dtype=np.int64)
+        else:
+            matrix = np.ascontiguousarray(matrix, dtype=np.float64) + 0.0   # -0.0 becomes 0.0
+        digest.update(name.encode() + b"=" + matrix.dtype.str.encode())
+        digest.update(matrix.tobytes())
+
+    agents = sorted(state.get("agents", []), key=lambda agent: agent.get("id", 0))
+    digest.update(json.dumps(agents, sort_keys=True, default=_json_number).encode())
+    return digest.hexdigest()
+
+
+def _json_number(value):
+    """NumPy numbers inside agents, written as plain numbers."""
+    if hasattr(value, "item"):
+        return value.item()
+    raise TypeError(f"cannot write {type(value).__name__} in a fingerprint")
+
+
+# ---------------------------------------------------------------------------
 # Save / Load
 # ---------------------------------------------------------------------------
 
@@ -171,7 +213,9 @@ def save_run(
         stored_generations_indices = [s.get("generation", i) for i, s in enumerate(states)]
 
     gen_data: dict[str, np.ndarray] = {}
+    fingerprints: dict[str, str] = {}
     for idx, st in zip(stored_generations_indices, states):
+        fingerprints[str(idx)] = fingerprint(st)
         gen_data[f"gen_{idx}_cells"] = np.asarray(st["cells"])
         for var_name, var_arr in st.get("values", {}).items():
             gen_data[f"gen_{idx}_val_{var_name}"] = np.asarray(var_arr)
@@ -190,6 +234,8 @@ def save_run(
         "last_generation": last.get("generation", 0),
         "stored_generations": stored_generations_indices,
         "rng_state": _serialize_rng_state(rng),
+        # generation -> fingerprint, for every stored generation and the last one
+        "fingerprints": dict(fingerprints, **{str(last.get("generation", 0)): fingerprint(last)}),
     }
     with open(run_dir / "meta.json", "w", encoding="utf-8") as f:
         json.dump(meta, f, indent=2, ensure_ascii=False)

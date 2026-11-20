@@ -37,6 +37,7 @@ from demo import (
     _print_states,
     _recovery_test,
     _seed_of,
+    ask_questions,
     show_evolution,
 )
 
@@ -286,6 +287,7 @@ def run_experiment_cli(args: argparse.Namespace) -> None:
 
     if not args.no_recovery_test:
         _recovery_test(automaton, experiment, raw_aut, raw_exp)
+    ask_questions(automaton, experiment)
 
     if not args.no_plot:
         print("\nOpening panel displaying intermediate generations evolution...")
