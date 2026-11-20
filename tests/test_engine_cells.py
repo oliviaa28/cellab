@@ -194,3 +194,143 @@ def test_one_full_matrix_is_drawn_per_probabilistic_rule():
     rng_manual.random(shape)
 
     assert rng_engine.random() == rng_manual.random()
+
+
+# ---------- Phase 2: formulas and numeric values (real JSON files) ----------
+
+from cellab.expressions import ExpressionRuntimeError  # noqa: E402
+from cellab.initial_state import create_initial_state  # noqa: E402
+from cellab.loader import load_files  # noqa: E402
+
+
+def load(experiment_path):
+    loaded = load_files(experiment_path)
+    assert loaded["automaton"] is not None, loaded
+    rng = np.random.default_rng(loaded["experiment"]["seed"] or 0)
+    state = create_initial_state(loaded["automaton"], loaded["experiment"], rng)
+    return loaded["automaton"], state, rng
+
+
+def test_sandpile_3x3_by_hand():
+    # experiments/sandpile_manual.json: the 8 in the middle topples twice, then two cells at the edge.
+    automaton, state, rng = load("experiments/sandpile_manual.json")
+
+    state = step_cells(automaton, state, rng)
+    np.testing.assert_array_equal(state["values"]["grains"], [[0, 2, 2], [3, 4, 2], [1, 3, 0]])
+    state = step_cells(automaton, state, rng)
+    np.testing.assert_array_equal(state["values"]["grains"], [[0, 3, 2], [4, 0, 3], [1, 4, 0]])
+    # (1, 0) and (2, 1) topple; the grains that fall outside the grid are lost
+    state = step_cells(automaton, state, rng)
+    np.testing.assert_array_equal(state["values"]["grains"], [[1, 3, 2], [0, 2, 3], [3, 0, 1]])
+    assert state["values"]["grains"].dtype == np.int64
+
+
+def test_sandpile_keeps_every_grain_when_nothing_reaches_the_edge():
+    automaton, state, rng = load("experiments/sandpile_center.json")
+    for _ in range(400):
+        state = step_cells(automaton, state, rng)
+    grains = state["values"]["grains"]
+    assert grains.sum() == 300
+    assert grains.max() <= 3
+    # the pile is symmetric
+    np.testing.assert_array_equal(grains, grains.T)
+    np.testing.assert_array_equal(grains, grains[::-1, :])
+
+
+def test_diffusion_point_by_hand():
+    automaton, state, rng = load("experiments/diffusion_point.json")
+    state = step_cells(automaton, state, rng)
+    expected = np.array([[0, 20, 0], [20, 20, 20], [0, 20, 0]], dtype=float)
+    np.testing.assert_allclose(state["values"]["heat"], expected)
+    for _ in range(50):
+        state = step_cells(automaton, state, rng)
+    # heat is kept (toroidal) and spreads out evenly
+    assert state["values"]["heat"].sum() == pytest.approx(100.0)
+    np.testing.assert_allclose(state["values"]["heat"], np.full((3, 3), 100 / 9), atol=1e-6)
+
+
+def test_voter_takes_the_majority_and_keeps_ties():
+    automaton, state, rng = load("experiments/voter_random.json")
+    a, b = automaton["state_codes"]["A"], automaton["state_codes"]["B"]
+    automaton = dict(automaton, world={"boundary": "fixed", "outside_code": a, "outside_values": {}})
+    state = make_state([[b, b, b], [b, a, b], [b, b, b]])
+
+    result = step_cells(automaton, state, rng)["cells"]
+    assert result[1, 1] == b    # 8 B neighbors
+    assert result[0, 0] == a    # 2 B against 6 A (5 of them outside)
+    assert result[0, 1] == b    # 4 B against 4 A: a tie, so it stays
+
+
+def make_formula_automaton(rules, variables=None, parameters=None):
+    """A small loaded automaton with states A=0, B=1 and the given variables (name -> type)."""
+    variables = variables or {}
+    automaton = make_automaton(rules, MOORE, boundary="toroidal")
+    automaton.update({
+        "state_names": ["A", "B"], "state_codes": {"A": 0, "B": 1},
+        "variable_types": variables, "parameters": parameters or {},
+    })
+    return automaton
+
+
+def test_int_variable_is_rounded_down_and_float_is_kept():
+    rule = make_rule([0], None)
+    rule["set"] = {"n": "n / 2", "x": "x / 2"}
+    automaton = make_formula_automaton([rule], {"n": "int", "x": "float"})
+    state = make_state(np.zeros((2, 2), dtype=np.int64))
+    state["values"] = {"n": np.full((2, 2), 5, dtype=np.int64), "x": np.full((2, 2), 5.0)}
+
+    result = step_cells(automaton, state, np.random.default_rng(0))
+    assert (result["values"]["n"] == 2).all() 
+    assert result["values"]["n"].dtype == np.int64
+    assert (result["values"]["x"] == 2.5).all()
+    assert (state["values"]["n"] == 5).all()      # the input is not modified
+
+
+def test_set_only_where_the_rule_applies_and_from_the_previous_generation():
+    # Every A cell takes 1 + the sum of its neighbors' n; B cells keep their n.
+    rule = make_rule([0], None)
+    rule["set"] = {"n": "1 + sum(n)"}
+    automaton = make_formula_automaton([rule], {"n": "int"})
+    state = make_state([[0, 1, 0]])
+    state["values"] = {"n": np.array([[1, 10, 100]], dtype=np.int64)}
+    automaton["neighbor_offsets"] = LINE
+
+    result = step_cells(automaton, state, np.random.default_rng(0))
+    # (0, 0): 1 + 100 + 10 (toroidal); (0, 2): 1 + 10 + 1 -- both from the old values
+    np.testing.assert_array_equal(result["values"]["n"], [[111, 10, 12]])
+
+
+def test_division_by_zero_stops_with_rule_and_generation():
+    rule = make_rule([0], None)
+    rule["set"] = {"n": "10 // n"}
+    automaton = make_formula_automaton([rule], {"n": "int"})
+    state = make_state([[0, 1]])
+    state["values"] = {"n": np.array([[0, 0]], dtype=np.int64)}
+    state["generation"] = 4
+
+    with pytest.raises(ExpressionRuntimeError) as error:
+        step_cells(automaton, state, np.random.default_rng(0))
+    assert "rule 0" in str(error.value) 
+    assert "generation 5" in str(error.value)
+    assert "10 // n" in str(error.value)
+
+    # no error when the dangerous cells do not use the rule
+    state["cells"] = np.array([[1, 1]])
+    step_cells(automaton, state, np.random.default_rng(0))
+
+
+def test_random_draw_order_condition_then_probability_then_set():
+    rule = make_rule([0], 1, when={"expr": "random() < 0.5"}, probability=0.5)
+    rule["set"] = {"x": "random()"}
+    automaton = make_formula_automaton([rule], {"x": "float"})
+    shape = (3, 5)
+    state = make_state(np.zeros(shape, dtype=np.int64))
+    state["values"] = {"x": np.zeros(shape)}
+
+    result = step_cells(automaton, state, np.random.default_rng(9))
+
+    rng = np.random.default_rng(9)
+    condition, probability, set_draw = rng.random(shape), rng.random(shape), rng.random(shape)
+    applies = (condition < 0.5) & (probability < 0.5)
+    np.testing.assert_array_equal(result["cells"], applies.astype(np.int64))
+    np.testing.assert_array_equal(result["values"]["x"], np.where(applies, set_draw, 0.0))
